@@ -7,6 +7,7 @@ const Debate = () => {
   const [proficiency, setProficiency] = useState('intermediate');
   const [topK, setTopK] = useState(4);
   const [useCoT, setUseCoT] = useState(true);
+  const [useDynamicPrompting, setUseDynamicPrompting] = useState(true);
   const [temperature, setTemperature] = useState(0.2);
   const [topP, setTopP] = useState(1.0);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +36,7 @@ const Debate = () => {
           proficiency,
           topK: parseInt(topK),
           useCoT,
+          useDynamicPrompting,
           temperature: parseFloat(temperature),
           top_p: parseFloat(topP)
         }),
@@ -132,19 +134,36 @@ const Debate = () => {
             </div>
           </div>
 
-          <div className="form-group checkbox-group">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={useCoT}
-                onChange={(e) => setUseCoT(e.target.checked)}
-              />
-              <span className="checkmark"></span>
-              Enable Chain-of-Thought Reasoning
-            </label>
-            <small className="help-text">
-              CoT allows the AI to use internal step-by-step reasoning for better accuracy
-            </small>
+          <div className="form-row">
+            <div className="form-group checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={useCoT}
+                  onChange={(e) => setUseCoT(e.target.checked)}
+                />
+                <span className="checkmark"></span>
+                Enable Chain-of-Thought Reasoning
+              </label>
+              <small className="help-text">
+                CoT allows the AI to use internal step-by-step reasoning for better accuracy
+              </small>
+            </div>
+
+            <div className="form-group checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={useDynamicPrompting}
+                  onChange={(e) => setUseDynamicPrompting(e.target.checked)}
+                />
+                <span className="checkmark"></span>
+                Enable Dynamic Prompting
+              </label>
+              <small className="help-text">
+                Dynamic prompting adapts prompts based on query complexity and user proficiency
+              </small>
+            </div>
           </div>
 
           <button type="submit" disabled={isLoading} className="submit-btn">
@@ -179,6 +198,14 @@ const Debate = () => {
               <div className="metadata-item">
                 <strong>CoT Enabled:</strong> {result.metadata?.useCoT ? 'Yes' : 'No'}
               </div>
+              <div className="metadata-item">
+                <strong>Dynamic Prompting:</strong> {result.metadata?.dynamicPrompting ? 'Yes' : 'No'}
+              </div>
+              {result.metadata?.dynamicPrompting && result.metadata?.dynamicMetadata && (
+                <div className="metadata-item">
+                  <strong>Query Complexity:</strong> {result.metadata.dynamicMetadata.complexity?.level || 'N/A'}
+                </div>
+              )}
             </div>
             
             <DebateBox data={result.data} />
