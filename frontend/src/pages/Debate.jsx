@@ -7,6 +7,9 @@ const Debate = () => {
   const [proficiency, setProficiency] = useState('intermediate');
   const [topK, setTopK] = useState(4);
   const [useCoT, setUseCoT] = useState(true);
+  const [useMultiShot, setUseMultiShot] = useState(false);
+  const [taskType, setTaskType] = useState('debate');
+  const [exampleCount, setExampleCount] = useState(2);
   const [temperature, setTemperature] = useState(0.2);
   const [topP, setTopP] = useState(1.0);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +38,9 @@ const Debate = () => {
           proficiency,
           topK: parseInt(topK),
           useCoT,
+          useMultiShot,
+          taskType,
+          exampleCount: parseInt(exampleCount),
           temperature: parseFloat(temperature),
           top_p: parseFloat(topP)
         }),
@@ -132,20 +138,74 @@ const Debate = () => {
             </div>
           </div>
 
-          <div className="form-group checkbox-group">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={useCoT}
-                onChange={(e) => setUseCoT(e.target.checked)}
-              />
-              <span className="checkmark"></span>
-              Enable Chain-of-Thought Reasoning
-            </label>
-            <small className="help-text">
-              CoT allows the AI to use internal step-by-step reasoning for better accuracy
-            </small>
+          <div className="form-row">
+            <div className="form-group checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={useCoT}
+                  onChange={(e) => setUseCoT(e.target.checked)}
+                  disabled={useMultiShot}
+                />
+                <span className="checkmark"></span>
+                Enable Chain-of-Thought Reasoning
+              </label>
+              <small className="help-text">
+                CoT allows the AI to use internal step-by-step reasoning for better accuracy
+              </small>
+            </div>
+
+            <div className="form-group checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={useMultiShot}
+                  onChange={(e) => setUseMultiShot(e.target.checked)}
+                />
+                <span className="checkmark"></span>
+                Enable Multi-Shot Prompting
+              </label>
+              <small className="help-text">
+                Multi-shot prompting provides multiple examples to guide AI responses
+              </small>
+            </div>
           </div>
+
+          {useMultiShot && (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="taskType">Task Type:</label>
+                  <select
+                    id="taskType"
+                    value={taskType}
+                    onChange={(e) => setTaskType(e.target.value)}
+                  >
+                    <option value="debate">Debate Generation</option>
+                    <option value="analysis">Concept Analysis</option>
+                  </select>
+                  <small className="help-text">
+                    Select the type of task you want the AI to perform using multi-shot prompting
+                  </small>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="exampleCount">Number of Examples:</label>
+                  <input
+                    type="number"
+                    id="exampleCount"
+                    value={exampleCount}
+                    onChange={(e) => setExampleCount(e.target.value)}
+                    min="1"
+                    max="5"
+                  />
+                  <small className="help-text">
+                    Number of examples to provide for better AI guidance (1-5)
+                  </small>
+                </div>
+              </div>
+            </>
+          )}
 
           <button type="submit" disabled={isLoading} className="submit-btn">
             {isLoading ? '🔄 Generating...' : '🚀 Generate Debate'}
@@ -177,8 +237,26 @@ const Debate = () => {
                 <strong>Citations Retrieved:</strong> {result.metadata?.retrievedChunks || 0}
               </div>
               <div className="metadata-item">
-                <strong>CoT Enabled:</strong> {result.metadata?.useCoT ? 'Yes' : 'No'}
+                <strong>Prompting Strategy:</strong> {result.metadata?.promptingStrategy || 'N/A'}
               </div>
+              {result.metadata?.promptingStrategy === 'multi-shot' && (
+                <>
+                  <div className="metadata-item">
+                    <strong>Task Type:</strong> {result.metadata?.taskType || 'N/A'}
+                  </div>
+                  <div className="metadata-item">
+                    <strong>Examples Used:</strong> {result.metadata?.examplesUsed || 'N/A'}
+                  </div>
+                  <div className="metadata-item">
+                    <strong>User Proficiency:</strong> {result.metadata?.proficiency || 'N/A'}
+                  </div>
+                </>
+              )}
+              {result.metadata?.promptingStrategy === 'chain-of-thought' && (
+                <div className="metadata-item">
+                  <strong>CoT Enabled:</strong> {result.metadata?.useCoT ? 'Yes' : 'No'}
+                </div>
+              )}
             </div>
             
             <DebateBox data={result.data} />

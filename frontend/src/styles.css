@@ -136,6 +136,11 @@ body {
   transform: scale(1.2);
 }
 
+.checkbox-label input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .help-text {
   color: #666;
   font-size: 0.9rem;

@@ -1,7 +1,11 @@
 // backend/src/controllers/debateController.js
 const { buildChainMessages } = require('../prompts/chainOfThoughtPrompt');
+const { MultiShotPromptEngine } = require('../prompts/multiShotPrompt');
 const { callGemini } = require('../services/geminiService');
 const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
+
+// Initialize multi-shot prompt engine
+const multiShotPromptEngine = new MultiShotPromptEngine();
 
 // Load corpus data for retrieval
 const corpus = require('../../data/corpus_chunks.json');
@@ -43,7 +47,10 @@ async function generate(req, res) {
       proficiency = 'intermediate', 
       temperature = 0.2, 
       top_p = 1.0, 
-      useCoT = true 
+      useCoT = true,
+      useMultiShot = false,
+      taskType = 'debate',
+      exampleCount = 2
     } = req.body;
 
     if (!query) {
@@ -56,15 +63,47 @@ async function generate(req, res) {
     // 1) RETRIEVE relevant chunks
     const retrievedChunks = retrieveChunks(query, topK);
 
-    // 2) Build messages with chain-of-thought prompt
-    const messages = buildChainMessages({ 
-      audience: proficiency, 
-      topic: query, 
-      retrievedChunks, 
-      minCitations: 2, 
-      proficiency, 
-      examples: true 
-    });
+    // 2) Build messages based on prompting strategy
+    let messages;
+    let promptMetadata = {};
+    
+    if (useMultiShot) {
+      // Use multi-shot prompting
+      const multiShotPrompt = multiShotPromptEngine.generateMultiShotPrompt(
+        taskType,
+        query,
+        proficiency,
+        retrievedChunks,
+        { 
+          exampleCount: parseInt(exampleCount),
+          additionalContext: req.body.additionalContext 
+        }
+      );
+      messages = multiShotPrompt.messages;
+      promptMetadata = {
+        promptingStrategy: 'multi-shot',
+        taskType: multiShotPrompt.metadata.taskType,
+        proficiency: multiShotPrompt.metadata.proficiency,
+        examplesUsed: multiShotPrompt.metadata.examplesUsed,
+        exampleQueries: multiShotPrompt.metadata.exampleQueries,
+        multiShotFeatures: multiShotPrompt.metadata.multiShotFeatures
+      };
+    } else {
+      // Use traditional chain-of-thought prompting
+      messages = buildChainMessages({ 
+        audience: proficiency, 
+        topic: query, 
+        retrievedChunks, 
+        minCitations: 2, 
+        proficiency, 
+        examples: true 
+      });
+      promptMetadata = {
+        promptingStrategy: 'chain-of-thought',
+        examples: true,
+        reasoning: useCoT ? 'enabled' : 'disabled'
+      };
+    }
 
     if (!useCoT) {
       messages[0].content = messages[0].content.replace(
@@ -110,7 +149,8 @@ async function generate(req, res) {
         useCoT,
         temperature,
         top_p,
-        tokens: llmResp.usage || { input: 0, output: 0 }
+        tokens: llmResp.usage || { input: 0, output: 0 },
+        ...promptMetadata
       },
       raw: llmResp.raw 
     });
