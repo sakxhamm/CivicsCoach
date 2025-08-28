@@ -1,7 +1,11 @@
 // backend/src/controllers/debateController.js
 const { buildChainMessages } = require('../prompts/chainOfThoughtPrompt');
+const { DynamicPromptEngine } = require('../prompts/dynamicPrompt');
 const { callGemini } = require('../services/geminiService');
 const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
+
+// Initialize dynamic prompt engine
+const dynamicPromptEngine = new DynamicPromptEngine();
 
 // Load corpus data for retrieval
 const corpus = require('../../data/corpus_chunks.json');
@@ -56,15 +60,31 @@ async function generate(req, res) {
     // 1) RETRIEVE relevant chunks
     const retrievedChunks = retrieveChunks(query, topK);
 
-    // 2) Build messages with chain-of-thought prompt
-    const messages = buildChainMessages({ 
-      audience: proficiency, 
-      topic: query, 
-      retrievedChunks, 
-      minCitations: 2, 
-      proficiency, 
-      examples: true 
-    });
+    // 2) Build messages with dynamic prompting
+    let messages;
+    let dynamicMetadata = {};
+    
+    if (req.body.useDynamicPrompting !== false) {
+      // Use dynamic prompting
+      const dynamicPrompt = dynamicPromptEngine.generateDynamicPrompt(
+        query, 
+        proficiency, 
+        retrievedChunks,
+        { previousResponses: req.body.previousResponses || [] }
+      );
+      messages = dynamicPrompt.messages;
+      dynamicMetadata = dynamicPrompt.metadata;
+    } else {
+      // Fallback to original chain-of-thought prompt
+      messages = buildChainMessages({ 
+        audience: proficiency, 
+        topic: query, 
+        retrievedChunks, 
+        minCitations: 2, 
+        proficiency, 
+        examples: true 
+      });
+    }
 
     if (!useCoT) {
       messages[0].content = messages[0].content.replace(
@@ -110,7 +130,9 @@ async function generate(req, res) {
         useCoT,
         temperature,
         top_p,
-        tokens: llmResp.usage || { input: 0, output: 0 }
+        tokens: llmResp.usage || { input: 0, output: 0 },
+        dynamicPrompting: req.body.useDynamicPrompting !== false,
+        dynamicMetadata: dynamicMetadata
       },
       raw: llmResp.raw 
     });
