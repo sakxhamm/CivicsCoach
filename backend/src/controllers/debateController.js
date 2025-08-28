@@ -1,7 +1,11 @@
 // backend/src/controllers/debateController.js
 const { buildChainMessages } = require('../prompts/chainOfThoughtPrompt');
+const { ZeroShotPromptEngine } = require('../prompts/zeroShotPrompt');
 const { callGemini } = require('../services/geminiService');
 const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
+
+// Initialize zero-shot prompt engine
+const zeroShotPromptEngine = new ZeroShotPromptEngine();
 
 // Load corpus data for retrieval
 const corpus = require('../../data/corpus_chunks.json');
@@ -43,7 +47,9 @@ async function generate(req, res) {
       proficiency = 'intermediate', 
       temperature = 0.2, 
       top_p = 1.0, 
-      useCoT = true 
+      useCoT = true,
+      useZeroShot = false,
+      taskType = 'debate'
     } = req.body;
 
     if (!query) {
@@ -56,15 +62,44 @@ async function generate(req, res) {
     // 1) RETRIEVE relevant chunks
     const retrievedChunks = retrieveChunks(query, topK);
 
-    // 2) Build messages with chain-of-thought prompt
-    const messages = buildChainMessages({ 
-      audience: proficiency, 
-      topic: query, 
-      retrievedChunks, 
-      minCitations: 2, 
-      proficiency, 
-      examples: true 
-    });
+    // 2) Build messages based on prompting strategy
+    let messages;
+    let promptMetadata = {};
+    
+    if (useZeroShot) {
+      // Use zero-shot prompting
+      const zeroShotPrompt = zeroShotPromptEngine.generateZeroShotPrompt(
+        taskType,
+        query,
+        proficiency,
+        retrievedChunks,
+        { additionalContext: req.body.additionalContext }
+      );
+      messages = zeroShotPrompt.messages;
+      promptMetadata = {
+        promptingStrategy: 'zero-shot',
+        taskType: zeroShotPrompt.metadata.taskType,
+        taskDescription: zeroShotPrompt.metadata.taskDescription,
+        outputFormat: zeroShotPrompt.metadata.outputFormat,
+        constraints: zeroShotPrompt.metadata.constraints,
+        zeroShotFeatures: zeroShotPrompt.metadata.zeroShotFeatures
+      };
+    } else {
+      // Use traditional chain-of-thought prompting
+      messages = buildChainMessages({ 
+        audience: proficiency, 
+        topic: query, 
+        retrievedChunks, 
+        minCitations: 2, 
+        proficiency, 
+        examples: true 
+      });
+      promptMetadata = {
+        promptingStrategy: 'chain-of-thought',
+        examples: true,
+        reasoning: useCoT ? 'enabled' : 'disabled'
+      };
+    }
 
     if (!useCoT) {
       messages[0].content = messages[0].content.replace(
@@ -110,7 +145,8 @@ async function generate(req, res) {
         useCoT,
         temperature,
         top_p,
-        tokens: llmResp.usage || { input: 0, output: 0 }
+        tokens: llmResp.usage || { input: 0, output: 0 },
+        ...promptMetadata
       },
       raw: llmResp.raw 
     });
