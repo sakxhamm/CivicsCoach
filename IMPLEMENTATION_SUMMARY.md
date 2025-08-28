@@ -2,20 +2,23 @@
 
 ## 🎯 What We've Built
 
-We have successfully implemented a comprehensive **Dynamic Prompting System** in the CivicsCoach project that automatically adapts AI prompts based on multiple contextual factors. This represents a significant evolution from static, one-size-fits-all prompting to intelligent, adaptive prompting.
+We have successfully implemented a comprehensive **Dynamic Prompting System** and **Multi-Shot Prompting System** in the CivicsCoach project that automatically adapts AI prompts based on multiple contextual factors. This represents a significant evolution from static, one-size-fits-all prompting to intelligent, adaptive prompting with example-based learning.
 
 ## 🏗️ Architecture Overview
 
 ### Core Components
 
-1. **DynamicPromptEngine** - Main orchestrator class
-2. **ComplexityAnalyzer** - Analyzes query characteristics in real-time
-3. **ContextBuilder** - Builds contextual information based on analysis
-4. **PromptOptimizer** - Optimizes final prompts with context-specific modifications
+1. **DynamicPromptEngine** - Main orchestrator class for adaptive prompting
+2. **MultiShotPromptEngine** - Advanced prompting with multiple examples
+3. **ComplexityAnalyzer** - Analyzes query characteristics in real-time
+4. **ContextBuilder** - Builds contextual information based on analysis
+5. **PromptOptimizer** - Optimizes final prompts with context-specific modifications
 
 ### Key Features
 
 - **Real-time Complexity Analysis**: Automatically detects query complexity (simple/medium/complex)
+- **Multi-Shot Learning**: Provides multiple examples to guide AI responses
+- **Proficiency-Based Examples**: Matches examples to user skill levels (Beginner/Intermediate/Advanced)
 - **Adaptive Example Selection**: Chooses relevant examples based on user level and query complexity
 - **Dynamic Reasoning Depth**: Adjusts reasoning instructions based on context
 - **Context-Aware Formatting**: Modifies output format instructions dynamically
@@ -29,6 +32,11 @@ We have successfully implemented a comprehensive **Dynamic Prompting System** in
    - Complete dynamic prompting engine implementation
    - Modular architecture with separate analyzers and builders
    - Extensible design for future enhancements
+
+2. **New File**: `backend/src/prompts/multiShotPrompt.js`
+   - Advanced multi-shot prompting system with 8 curated examples
+   - 4 task types: Debate, Analysis, Comparison, Explanation
+   - Proficiency-based example selection (Beginner/Intermediate/Advanced)
 
 2. **Updated**: `backend/src/controllers/debateController.js`
    - Integrated dynamic prompting with existing debate generation
@@ -53,10 +61,20 @@ We have successfully implemented a comprehensive **Dynamic Prompting System** in
    - Covers concept, implementation, and demonstration
    - Ready for video production
 
-2. **Technical Documentation**: `docs/dynamic-prompting.md`
-   - Complete implementation guide
+2. **Video Script**: `video_script_multi_shot.md`
+   - 20-minute video script explaining multi-shot prompting
+   - Demonstrates implementation and benefits
+   - Ready for video production
+
+3. **Technical Documentation**: `docs/dynamic-prompting.md`
+   - Complete implementation guide for dynamic prompting
    - Configuration options and best practices
    - Troubleshooting and future enhancements
+
+4. **Technical Documentation**: `docs/multi-shot-prompting.md`
+   - Comprehensive guide to multi-shot prompting system
+   - Example sets, proficiency levels, and best practices
+   - Integration and troubleshooting guide
 
 ## 🧪 Testing & Validation
 
@@ -72,12 +90,23 @@ We have successfully implemented a comprehensive **Dynamic Prompting System** in
    - Shows actual prompts for different scenarios
    - Highlights key differences and adaptations
 
+3. **`backend/scripts/test_multi_shot_prompting.js`**
+   - Comprehensive test suite for multi-shot prompting
+   - Tests all 4 task types and proficiency levels
+   - Validates example selection and prompt generation
+
+4. **`backend/scripts/demo_multi_shot_vs_zero_shot.js`**
+   - Direct comparison between zero-shot and multi-shot approaches
+   - Shows quality improvements and use case recommendations
+   - Demonstrates when to use each technique
+
 ### Test Results
 
-✅ **All Tests Passing**: Complexity detection working correctly
-✅ **Adaptive Behavior**: Prompts automatically adjust to user needs
-✅ **Performance**: Real-time prompt generation with metadata tracking
-✅ **Integration**: Seamlessly works with existing debate system
+✅ **All Tests Passing**: Complexity detection and multi-shot prompting working correctly
+✅ **Adaptive Behavior**: Prompts automatically adjust to user needs and proficiency levels
+✅ **Multi-Shot Learning**: 8 curated examples across 4 task types with proficiency matching
+✅ **Performance**: Real-time prompt generation with comprehensive metadata tracking
+✅ **Integration**: Seamlessly works with existing debate system and AI services
 
 ## 🎭 Dynamic Prompting in Action
 
@@ -95,9 +124,31 @@ We have successfully implemented a comprehensive **Dynamic Prompting System** in
 - **Format**: Academic with detailed analysis
 - **Instructions**: Include nuanced perspectives, reference legal precedents
 
+## 🎯 Multi-Shot Prompting in Action
+
+### Example 1: Debate Generation (Intermediate)
+- **Topic**: "Separation of Powers in Indian Constitution"
+- **Examples Provided**: 2 relevant examples
+- **Output**: Structured debate with stance, counter-stance, citations, quiz
+- **Quality**: High consistency through example guidance
+
+### Example 2: Analysis Generation (Advanced)
+- **Topic**: "Federalism and Center-State Relations"
+- **Examples Provided**: 2 sophisticated examples
+- **Output**: Comprehensive analysis with constitutional basis, implications, challenges
+- **Quality**: Expert-level analysis through example demonstration
+
+### Example 3: Comparison Generation (Beginner)
+- **Topic**: "Directive Principles vs Fundamental Rights"
+- **Examples Provided**: 2 clear comparison examples
+- **Output**: Structured comparison with similarities, differences, conclusions
+- **Quality**: Clear understanding through example patterns
+
 ## 🚀 Key Benefits Achieved
 
-1. **Adaptive Complexity**: Automatically serves different user levels appropriately
+1. **Multi-Shot Learning**: AI learns through examples for better quality and consistency
+2. **Proficiency Matching**: Automatically adapts to user skill levels (Beginner/Intermediate/Advanced)
+3. **Adaptive Complexity**: Automatically serves different user levels appropriately
 2. **Context-Aware Examples**: Relevant examples selected based on query and user level
 3. **Real-time Optimization**: Prompts continuously improve based on context
 4. **Efficiency**: No manual prompt engineering needed for different scenarios
