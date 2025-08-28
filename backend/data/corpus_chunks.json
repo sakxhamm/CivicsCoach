@@ -1,0 +1,48 @@
+[
+  {
+    "id": "article110",
+    "text": "Article 110 of the Indian Constitution defines Money Bills. A Bill is deemed to be a Money Bill if it contains only provisions dealing with all or any of the following matters: (a) the imposition, abolition, remission, alteration or regulation of any tax; (b) the regulation of the borrowing of money or the giving of any guarantee by the Government of India; (c) the custody of the Consolidated Fund or the Contingency Fund of India, the payment of moneys into or the withdrawal of moneys from any such Fund; (d) the appropriation of moneys out of the Consolidated Fund of India; (e) the declaring of any expenditure to be expenditure charged on the Consolidated Fund of India or the increasing of the amount of any such expenditure; (f) the receipt of money on account of the Consolidated Fund of India or the public account of India or the custody or issue of such money or the audit of the accounts of the Union or of a State; or (g) any matter incidental to any of the matters specified in sub-clauses (a) to (f).",
+    "metadata": {
+      "source": "Constitution of India",
+      "article": "110",
+      "topic": "Money Bills"
+    }
+  },
+  {
+    "id": "basic_structure",
+    "text": "The Basic Structure Doctrine was established by the Supreme Court in Kesavananda Bharati v. State of Kerala (1973). It holds that while Parliament has the power to amend the Constitution under Article 368, it cannot alter the 'basic structure' or fundamental features of the Constitution. The basic structure includes: supremacy of the Constitution, republican and democratic form of government, secular character, separation of powers, federal character, and fundamental rights. This doctrine acts as a limitation on the amending power of Parliament.",
+    "metadata": {
+      "source": "Supreme Court Judgment",
+      "case": "Kesavananda Bharati v. State of Kerala",
+      "year": "1973",
+      "topic": "Basic Structure Doctrine"
+    }
+  },
+  {
+    "id": "emergency_powers",
+    "text": "Article 352 of the Indian Constitution provides for the proclamation of Emergency. The President can declare Emergency if he is satisfied that a grave emergency exists whereby the security of India or any part of the territory thereof is threatened, whether by war or external aggression or armed rebellion. During Emergency, the executive power of the Union extends to giving directions to any State, and Parliament can make laws on subjects in the State List. The Emergency must be approved by both Houses of Parliament within one month, and it can be extended for six months at a time.",
+    "metadata": {
+      "source": "Constitution of India",
+      "article": "352",
+      "topic": "Emergency Powers"
+    }
+  },
+  {
+    "id": "judicial_review",
+    "text": "Judicial Review is the power of the Supreme Court and High Courts to examine the constitutionality of legislative enactments and executive orders of both the Central and State governments. Under Article 13, any law that is inconsistent with or in derogation of fundamental rights shall be void. The Supreme Court can strike down laws that violate fundamental rights or exceed the legislative competence of the enacting body. This power acts as a check on the legislative and executive branches, ensuring they function within constitutional limits.",
+    "metadata": {
+      "source": "Constitution of India",
+      "article": "13",
+      "topic": "Judicial Review"
+    }
+  },
+  {
+    "id": "federalism",
+    "text": "India follows a federal structure with a strong unitary bias. The Constitution divides powers between the Centre and States through three lists: Union List (97 subjects), State List (66 subjects), and Concurrent List (47 subjects). The Centre has exclusive power over subjects in the Union List, States have exclusive power over State List subjects, and both can legislate on Concurrent List subjects. However, in case of conflict, the Central law prevails. The Centre also has residuary powers and can override State laws in certain circumstances, making it a 'quasi-federal' system.",
+    "metadata": {
+      "source": "Constitution of India",
+      "seventh_schedule": "Union, State, and Concurrent Lists",
+      "topic": "Federal Structure"
+    }
+  }
+]
