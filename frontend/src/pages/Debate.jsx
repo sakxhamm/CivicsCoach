@@ -7,6 +7,9 @@ const Debate = () => {
   const [proficiency, setProficiency] = useState('intermediate');
   const [topK, setTopK] = useState(4);
   const [useCoT, setUseCoT] = useState(true);
+  const [useZeroShot, setUseZeroShot] = useState(false);
+  const [taskType, setTaskType] = useState('debate');
+
   const [useDynamicPrompting, setUseDynamicPrompting] = useState(true);
   const [temperature, setTemperature] = useState(0.2);
   const [topP, setTopP] = useState(1.0);
@@ -36,6 +39,9 @@ const Debate = () => {
           proficiency,
           topK: parseInt(topK),
           useCoT,
+
+          useZeroShot,
+          taskType,
           useDynamicPrompting,
           temperature: parseFloat(temperature),
           top_p: parseFloat(topP)
@@ -141,6 +147,9 @@ const Debate = () => {
                   type="checkbox"
                   checked={useCoT}
                   onChange={(e) => setUseCoT(e.target.checked)}
+
+                  disabled={useZeroShot}
+
                 />
                 <span className="checkmark"></span>
                 Enable Chain-of-Thought Reasoning
@@ -154,6 +163,16 @@ const Debate = () => {
               <label className="checkbox-label">
                 <input
                   type="checkbox"
+
+                  checked={useZeroShot}
+                  onChange={(e) => setUseZeroShot(e.target.checked)}
+                />
+                <span className="checkmark"></span>
+                Enable Zero-Shot Prompting
+              </label>
+              <small className="help-text">
+                Zero-shot prompting performs tasks without examples or training data
+
                   checked={useDynamicPrompting}
                   onChange={(e) => setUseDynamicPrompting(e.target.checked)}
                 />
@@ -162,9 +181,29 @@ const Debate = () => {
               </label>
               <small className="help-text">
                 Dynamic prompting adapts prompts based on query complexity and user proficiency
+
               </small>
             </div>
           </div>
+
+          {useZeroShot && (
+            <div className="form-group">
+              <label htmlFor="taskType">Task Type:</label>
+              <select
+                id="taskType"
+                value={taskType}
+                onChange={(e) => setTaskType(e.target.value)}
+              >
+                <option value="debate">Debate Generation</option>
+                <option value="analysis">Concept Analysis</option>
+                <option value="comparison">Concept Comparison</option>
+                <option value="explanation">Concept Explanation</option>
+              </select>
+              <small className="help-text">
+                Select the type of task you want the AI to perform using zero-shot prompting
+              </small>
+            </div>
+          )}
 
           <button type="submit" disabled={isLoading} className="submit-btn">
             {isLoading ? '🔄 Generating...' : '🚀 Generate Debate'}
@@ -196,14 +235,30 @@ const Debate = () => {
                 <strong>Citations Retrieved:</strong> {result.metadata?.retrievedChunks || 0}
               </div>
               <div className="metadata-item">
-                <strong>CoT Enabled:</strong> {result.metadata?.useCoT ? 'Yes' : 'No'}
+                <strong>Prompting Strategy:</strong> {result.metadata?.promptingStrategy || 'N/A'}
               </div>
+
+              {result.metadata?.promptingStrategy === 'zero-shot' && (
+                <>
+                  <div className="metadata-item">
+                    <strong>Task Type:</strong> {result.metadata?.taskType || 'N/A'}
+                  </div>
+                  <div className="metadata-item">
+                    <strong>Output Format:</strong> {result.metadata?.outputFormat || 'N/A'}
+                  </div>
+                </>
+              )}
+              {result.metadata?.promptingStrategy === 'chain-of-thought' && (
+                <div className="metadata-item">
+                  <strong>CoT Enabled:</strong> {result.metadata?.useCoT ? 'Yes' : 'No'}
+
               <div className="metadata-item">
                 <strong>Dynamic Prompting:</strong> {result.metadata?.dynamicPrompting ? 'Yes' : 'No'}
               </div>
               {result.metadata?.dynamicPrompting && result.metadata?.dynamicMetadata && (
                 <div className="metadata-item">
                   <strong>Query Complexity:</strong> {result.metadata.dynamicMetadata.complexity?.level || 'N/A'}
+
                 </div>
               )}
             </div>

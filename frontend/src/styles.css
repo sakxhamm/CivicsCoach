@@ -140,6 +140,15 @@ body {
   transform: scale(1.2);
 }
 
+.checkbox-label input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-label input[type="checkbox"]:disabled + .checkmark {
+  opacity: 0.5;
+}
+
 .help-text {
   color: #666;
   font-size: 0.9rem;
