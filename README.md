@@ -364,47 +364,34 @@ For questions, issues, or contributions:
 ---
 
 **CivicsCoach** - Empowering constitutional education through AI-powered debate generation with Chain of Thought reasoning. 🧠⚖️
-=======
-CivicsCoach: Debate & Fact-Check Studio 🇮🇳
 
-Interactive Debate Coach & Fact-Checker for Indian Polity (UPSC / UGC-NET / Civics learners)
+## 🚀 Project Overview
 
 CivicsCoach is a GenAI-powered project that helps learners debate, fact-check, and understand Indian Polity better. It combines LLM prompting techniques, embeddings, similarity search, and structured outputs to generate arguments, counter-arguments, and verified facts from constitutional articles, case law, and standard references.
 
-Features
+## ✨ Features
 
-Embeddings + Vector DB
+### Embeddings + Vector DB
+- Embeds Constitution articles, SC judgments summaries, and Polity notes
+- Stores in a vector database for retrieval
 
-Embeds Constitution articles, SC judgments summaries, and Polity notes.
+### Similarity Search Trio
+- Cosine, Dot Product, and L2 Distance implemented
+- UI toggle to compare retrieval quality
+- Adjustable Top-K slider for context size
 
-Stores in a vector database for retrieval.
+### Dynamic Debate Coaching
+- Input: Any polity question or statement
+- Output: stance + counter-stance + citations
+- Adjusts depth & style (Beginner ↔ Advanced) with dynamic prompting
 
-Similarity Search Trio
+### Function Calling
+- `get_article(article_no)` → fetch Constitution article
+- `fetch_case_law(case_id)` → retrieve case summary
+- `make_quiz(topic)` → auto-generate practice quiz
 
-Cosine, Dot Product, and L2 Distance implemented.
-
-UI toggle to compare retrieval quality.
-
-Adjustable Top-K slider for context size.
-
-Dynamic Debate Coaching
-
-Input: Any polity question or statement.
-
-Output: stance + counter-stance + citations.
-
-Adjusts depth & style (Beginner ↔ Advanced) with dynamic prompting.
-
-Function Calling
-
-get_article(article_no) → fetch Constitution article.
-
-fetch_case_law(case_id) → retrieve case summary.
-
-make_quiz(topic) → auto-generate practice quiz.
-
-Structured Output (JSON)
-
+### Structured Output (JSON)
+```json
 {
   "stance": "...",
   "counterStance": "...",
@@ -413,9 +400,10 @@ Structured Output (JSON)
     {"q": "What is Article 110 about?", "a": "Money Bills"}
   ]
 }
+```
 
 
-Prompting Techniques Used
+## 🧠 Prompting Techniques Used
 
 Zero-shot prompting: “Explain Article 110 with examples.”
 

@@ -8,6 +8,8 @@ const Debate = () => {
   const [topK, setTopK] = useState(4);
   const [useCoT, setUseCoT] = useState(true);
   const [useMultiShot, setUseMultiShot] = useState(false);
+  const [useZeroShot, setUseZeroShot] = useState(false);
+  const [useDynamicPrompting, setUseDynamicPrompting] = useState(true);
   const [taskType, setTaskType] = useState('debate');
   const [exampleCount, setExampleCount] = useState(2);
   const [temperature, setTemperature] = useState(0.2);
@@ -39,6 +41,8 @@ const Debate = () => {
           topK: parseInt(topK),
           useCoT,
           useMultiShot,
+          useZeroShot,
+          useDynamicPrompting,
           taskType,
           exampleCount: parseInt(exampleCount),
           temperature: parseFloat(temperature),
@@ -145,7 +149,7 @@ const Debate = () => {
                   type="checkbox"
                   checked={useCoT}
                   onChange={(e) => setUseCoT(e.target.checked)}
-                  disabled={useMultiShot}
+                  disabled={useMultiShot || useZeroShot}
                 />
                 <span className="checkmark"></span>
                 Enable Chain-of-Thought Reasoning
@@ -167,6 +171,38 @@ const Debate = () => {
               </label>
               <small className="help-text">
                 Multi-shot prompting provides multiple examples to guide AI responses
+              </small>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={useZeroShot}
+                  onChange={(e) => setUseZeroShot(e.target.checked)}
+                />
+                <span className="checkmark"></span>
+                Enable Zero-Shot Prompting
+              </label>
+              <small className="help-text">
+                Zero-shot prompting performs tasks without examples or training data
+              </small>
+            </div>
+
+            <div className="form-group checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={useDynamicPrompting}
+                  onChange={(e) => setUseDynamicPrompting(e.target.checked)}
+                />
+                <span className="checkmark"></span>
+                Enable Dynamic Prompting
+              </label>
+              <small className="help-text">
+                Dynamic prompting adapts prompts based on query complexity and user proficiency
               </small>
             </div>
           </div>
@@ -205,6 +241,25 @@ const Debate = () => {
                 </div>
               </div>
             </>
+          )}
+
+          {useZeroShot && (
+            <div className="form-group">
+              <label htmlFor="taskType">Task Type:</label>
+              <select
+                id="taskType"
+                value={taskType}
+                onChange={(e) => setTaskType(e.target.value)}
+              >
+                <option value="debate">Debate Generation</option>
+                <option value="analysis">Concept Analysis</option>
+                <option value="comparison">Concept Comparison</option>
+                <option value="explanation">Concept Explanation</option>
+              </select>
+              <small className="help-text">
+                Select the type of task you want the AI to perform using zero-shot prompting
+              </small>
+            </div>
           )}
 
           <button type="submit" disabled={isLoading} className="submit-btn">
@@ -252,9 +307,27 @@ const Debate = () => {
                   </div>
                 </>
               )}
+              {result.metadata?.promptingStrategy === 'zero-shot' && (
+                <>
+                  <div className="metadata-item">
+                    <strong>Task Type:</strong> {result.metadata?.taskType || 'N/A'}
+                  </div>
+                  <div className="metadata-item">
+                    <strong>Output Format:</strong> {result.metadata?.outputFormat || 'N/A'}
+                  </div>
+                </>
+              )}
               {result.metadata?.promptingStrategy === 'chain-of-thought' && (
                 <div className="metadata-item">
                   <strong>CoT Enabled:</strong> {result.metadata?.useCoT ? 'Yes' : 'No'}
+                </div>
+              )}
+              <div className="metadata-item">
+                <strong>Dynamic Prompting:</strong> {result.metadata?.dynamicPrompting ? 'Yes' : 'No'}
+              </div>
+              {result.metadata?.dynamicPrompting && result.metadata?.dynamicMetadata && (
+                <div className="metadata-item">
+                  <strong>Query Complexity:</strong> {result.metadata.dynamicMetadata.complexity?.level || 'N/A'}
                 </div>
               )}
             </div>

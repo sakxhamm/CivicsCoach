@@ -1,11 +1,15 @@
 // backend/src/controllers/debateController.js
 const { buildChainMessages } = require('../prompts/chainOfThoughtPrompt');
 const { MultiShotPromptEngine } = require('../prompts/multiShotPrompt');
+const { ZeroShotPromptEngine } = require('../prompts/zeroShotPrompt');
+const { DynamicPromptEngine } = require('../prompts/dynamicPrompt');
 const { callGemini } = require('../services/geminiService');
 const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
 
-// Initialize multi-shot prompt engine
+// Initialize all prompt engines
 const multiShotPromptEngine = new MultiShotPromptEngine();
+const zeroShotPromptEngine = new ZeroShotPromptEngine();
+const dynamicPromptEngine = new DynamicPromptEngine();
 
 // Load corpus data for retrieval
 const corpus = require('../../data/corpus_chunks.json');
