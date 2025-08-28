@@ -1,3 +1,4 @@
+
 # Zero-Shot Prompting in CivicsCoach - Video Script
 
 ## Introduction (0:00 - 0:30)
@@ -105,9 +106,112 @@ This is the power of zero-shot prompting - the AI is figuring out how to perform
 - **Task-specific instructions**: Tailored prompts for different types of analysis
 - **Metadata tracking**: Comprehensive information about what the AI is doing
 
+# Dynamic Prompting in CivicsCoach - Video Script
+
+## Introduction (0:00 - 0:30)
+"Welcome to this demonstration of Dynamic Prompting in our CivicsCoach project! Today, I'll explain what dynamic prompting is, why it's powerful, and show you exactly how we've implemented it in our AI-powered debate generation system."
+
+## What is Dynamic Prompting? (0:30 - 2:00)
+
+"Dynamic prompting is an advanced AI technique where the system automatically adapts and optimizes prompts based on multiple contextual factors. Instead of using a one-size-fits-all approach, the system analyzes the input and dynamically constructs the most effective prompt for that specific situation.
+
+Think of it like having a smart teacher who automatically adjusts their teaching style based on:
+- The student's current knowledge level
+- The complexity of the topic being discussed
+- The type of question being asked
+- Previous interactions and learning patterns
+
+In traditional AI systems, you'd have a fixed prompt template that gets filled in with variables. But with dynamic prompting, the entire prompt structure, examples, instructions, and complexity level adapts in real-time."
+
+## Why Dynamic Prompting Matters (2:00 - 3:30)
+
+"Dynamic prompting solves several critical problems in AI applications:
+
+1. **Adaptive Complexity**: A beginner asking about the Constitution gets a simple, jargon-free explanation, while an advanced user gets nuanced legal analysis with specific precedents.
+
+2. **Context-Aware Examples**: The system automatically selects relevant examples based on the query complexity and user proficiency level.
+
+3. **Real-time Optimization**: Prompts are continuously improved based on what works best for different types of questions and users.
+
+4. **Efficiency**: No more manual prompt engineering for different scenarios - the system handles it automatically.
+
+5. **Better User Experience**: Users get responses that match their current understanding level, making learning more effective."
+
+## How We've Implemented Dynamic Prompting (3:30 - 6:00)
+
+"Let me show you exactly how we've built this in CivicsCoach. Our implementation consists of three main components:
+
+### 1. Complexity Analyzer
+The system automatically analyzes each query to determine its complexity level. It looks at:
+- Query length and structure
+- Presence of legal/constitutional terminology
+- Question type (factual vs. analytical)
+- Overall complexity score
+
+### 2. Context Builder
+Based on the complexity analysis and user proficiency, the system builds contextual information including:
+- Relevant examples at the right difficulty level
+- Appropriate reasoning depth
+- Output format preferences
+- Additional instructions
+
+### 3. Prompt Optimizer
+Finally, the system optimizes the prompt by:
+- Adding context-specific modifications
+- Including relevant examples
+- Adjusting language complexity
+- Modifying output format instructions
+
+Let me demonstrate this in action..."
+
+## Live Demonstration (6:00 - 10:00)
+
+"Now let's see this working in real-time. I'll show you how the same query gets different prompts based on different settings:
+
+### Example 1: Simple Query for Beginner
+Query: 'What is the Constitution?'
+- Complexity detected: Simple
+- Examples selected: Basic constitutional concepts
+- Language: Simple, jargon-free
+- Output format: Simplified with bullet points
+
+### Example 2: Complex Query for Advanced User
+Query: 'Analyze the evolution of federalism in India post-independence and its implications for contemporary governance'
+- Complexity detected: Complex
+- Examples selected: Advanced federalism concepts
+- Language: Academic with legal terminology
+- Output format: Comprehensive analysis with citations
+
+Notice how the system automatically:
+- Detects the complexity level
+- Selects appropriate examples
+- Adjusts the reasoning depth
+- Modifies the output format
+- Adds relevant instructions
+
+This happens in real-time, with no manual intervention needed!"
+
+## Technical Implementation Details (10:00 - 12:30)
+
+"Let me walk you through the code structure. Our dynamic prompting system is built with:
+
+### Backend Architecture
+- **DynamicPromptEngine class**: Main orchestrator
+- **ComplexityAnalyzer**: Analyzes query characteristics
+- **ContextBuilder**: Builds contextual information
+- **PromptOptimizer**: Optimizes final prompts
+
+### Key Features
+- **Real-time complexity scoring**: Based on multiple factors
+- **Adaptive example selection**: Examples that match user level
+- **Dynamic instruction generation**: Instructions that adapt to context
+- **Performance tracking**: Metadata about prompt optimization
+
+
 ### Integration Points
 - Seamlessly integrated with existing debate generation
 - Fallback to traditional prompting when needed
+
 - Extensible architecture for new task types
 - Performance metrics for zero-shot capabilities
 
@@ -184,5 +288,48 @@ Thank you for joining me on this deep dive into zero-shot prompting! This repres
 - The system is built with Node.js and integrates with Google's Gemini API
 - All prompts are self-contained and require no examples or training data
 - The architecture is modular and easily extensible for new task types
+
+- Extensible architecture for future enhancements
+
+The system maintains backward compatibility while adding powerful new capabilities."
+
+## Benefits and Results (12:30 - 14:00)
+
+"Since implementing dynamic prompting, we've seen significant improvements:
+
+1. **Better Response Quality**: Responses are more appropriately tailored to user needs
+2. **Improved User Engagement**: Users get content at their level, reducing confusion
+3. **Reduced Manual Work**: No need to manually adjust prompts for different scenarios
+4. **Scalability**: The system automatically handles diverse user types and query complexities
+5. **Learning Adaptation**: The system gets better over time as it learns from interactions
+
+For example, a beginner asking about 'Money Bills' now gets a simple explanation with basic examples, while an advanced user gets detailed legal analysis with specific constitutional articles and court cases."
+
+## Future Enhancements (14:00 - 15:00)
+
+"We're already planning several enhancements to make the system even more intelligent:
+
+1. **Machine Learning Integration**: Using response quality feedback to improve prompt optimization
+2. **User Behavior Analysis**: Learning from how users interact with different response types
+3. **Multi-modal Adaptation**: Adapting not just text but also visual and interactive elements
+4. **Real-time Learning**: Continuous improvement based on user feedback and success metrics
+
+The beauty of dynamic prompting is that it's a foundation that can continuously improve and adapt."
+
+## Conclusion (15:00 - 16:00)
+
+"Dynamic prompting represents a significant evolution in how we interact with AI systems. Instead of static, rigid prompts, we now have intelligent, adaptive systems that understand context and automatically optimize themselves.
+
+In CivicsCoach, this means every user gets a personalized learning experience that matches their current understanding level. Whether you're a student just learning about democracy or a legal professional analyzing constitutional nuances, the system automatically adapts to serve you better.
+
+The key insight is that great AI isn't just about having good models - it's about having intelligent ways to communicate with those models. Dynamic prompting gives us that intelligence, making AI systems more human-like in their ability to adapt and serve diverse needs.
+
+Thank you for joining me on this deep dive into dynamic prompting! If you're interested in implementing similar systems in your own projects, the principles we've covered here can be applied to any AI application that needs to serve diverse users and use cases."
+
+## Technical Notes for Implementation
+- The system is built with Node.js and integrates with Google's Gemini API
+- All prompts are dynamically generated based on real-time analysis
+- The architecture is modular and easily extensible
+
 - Performance metrics are tracked for continuous improvement
 - The system gracefully falls back to traditional prompting when needed

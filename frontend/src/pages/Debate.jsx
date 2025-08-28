@@ -9,6 +9,8 @@ const Debate = () => {
   const [useCoT, setUseCoT] = useState(true);
   const [useZeroShot, setUseZeroShot] = useState(false);
   const [taskType, setTaskType] = useState('debate');
+
+  const [useDynamicPrompting, setUseDynamicPrompting] = useState(true);
   const [temperature, setTemperature] = useState(0.2);
   const [topP, setTopP] = useState(1.0);
   const [isLoading, setIsLoading] = useState(false);
@@ -37,8 +39,10 @@ const Debate = () => {
           proficiency,
           topK: parseInt(topK),
           useCoT,
+
           useZeroShot,
           taskType,
+          useDynamicPrompting,
           temperature: parseFloat(temperature),
           top_p: parseFloat(topP)
         }),
@@ -143,7 +147,9 @@ const Debate = () => {
                   type="checkbox"
                   checked={useCoT}
                   onChange={(e) => setUseCoT(e.target.checked)}
+
                   disabled={useZeroShot}
+
                 />
                 <span className="checkmark"></span>
                 Enable Chain-of-Thought Reasoning
@@ -157,6 +163,7 @@ const Debate = () => {
               <label className="checkbox-label">
                 <input
                   type="checkbox"
+
                   checked={useZeroShot}
                   onChange={(e) => setUseZeroShot(e.target.checked)}
                 />
@@ -165,6 +172,16 @@ const Debate = () => {
               </label>
               <small className="help-text">
                 Zero-shot prompting performs tasks without examples or training data
+
+                  checked={useDynamicPrompting}
+                  onChange={(e) => setUseDynamicPrompting(e.target.checked)}
+                />
+                <span className="checkmark"></span>
+                Enable Dynamic Prompting
+              </label>
+              <small className="help-text">
+                Dynamic prompting adapts prompts based on query complexity and user proficiency
+
               </small>
             </div>
           </div>
@@ -220,6 +237,7 @@ const Debate = () => {
               <div className="metadata-item">
                 <strong>Prompting Strategy:</strong> {result.metadata?.promptingStrategy || 'N/A'}
               </div>
+
               {result.metadata?.promptingStrategy === 'zero-shot' && (
                 <>
                   <div className="metadata-item">
@@ -233,6 +251,14 @@ const Debate = () => {
               {result.metadata?.promptingStrategy === 'chain-of-thought' && (
                 <div className="metadata-item">
                   <strong>CoT Enabled:</strong> {result.metadata?.useCoT ? 'Yes' : 'No'}
+
+              <div className="metadata-item">
+                <strong>Dynamic Prompting:</strong> {result.metadata?.dynamicPrompting ? 'Yes' : 'No'}
+              </div>
+              {result.metadata?.dynamicPrompting && result.metadata?.dynamicMetadata && (
+                <div className="metadata-item">
+                  <strong>Query Complexity:</strong> {result.metadata.dynamicMetadata.complexity?.level || 'N/A'}
+
                 </div>
               )}
             </div>

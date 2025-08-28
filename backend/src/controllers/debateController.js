@@ -1,11 +1,19 @@
 // backend/src/controllers/debateController.js
 const { buildChainMessages } = require('../prompts/chainOfThoughtPrompt');
+
 const { ZeroShotPromptEngine } = require('../prompts/zeroShotPrompt');
 const { callGemini } = require('../services/geminiService');
 const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
 
 // Initialize zero-shot prompt engine
 const zeroShotPromptEngine = new ZeroShotPromptEngine();
+const { DynamicPromptEngine } = require('../prompts/dynamicPrompt');
+const { callGemini } = require('../services/geminiService');
+const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
+
+// Initialize dynamic prompt engine
+const dynamicPromptEngine = new DynamicPromptEngine();
+
 
 // Load corpus data for retrieval
 const corpus = require('../../data/corpus_chunks.json');
@@ -62,6 +70,7 @@ async function generate(req, res) {
     // 1) RETRIEVE relevant chunks
     const retrievedChunks = retrieveChunks(query, topK);
 
+
     // 2) Build messages based on prompting strategy
     let messages;
     let promptMetadata = {};
@@ -86,6 +95,24 @@ async function generate(req, res) {
       };
     } else {
       // Use traditional chain-of-thought prompting
+
+    // 2) Build messages with dynamic prompting
+    let messages;
+    let dynamicMetadata = {};
+    
+    if (req.body.useDynamicPrompting !== false) {
+      // Use dynamic prompting
+      const dynamicPrompt = dynamicPromptEngine.generateDynamicPrompt(
+        query, 
+        proficiency, 
+        retrievedChunks,
+        { previousResponses: req.body.previousResponses || [] }
+      );
+      messages = dynamicPrompt.messages;
+      dynamicMetadata = dynamicPrompt.metadata;
+    } else {
+      // Fallback to original chain-of-thought prompt
+
       messages = buildChainMessages({ 
         audience: proficiency, 
         topic: query, 
@@ -94,11 +121,13 @@ async function generate(req, res) {
         proficiency, 
         examples: true 
       });
+
       promptMetadata = {
         promptingStrategy: 'chain-of-thought',
         examples: true,
         reasoning: useCoT ? 'enabled' : 'disabled'
       };
+
     }
 
     if (!useCoT) {
@@ -146,7 +175,11 @@ async function generate(req, res) {
         temperature,
         top_p,
         tokens: llmResp.usage || { input: 0, output: 0 },
+
         ...promptMetadata
+        dynamicPrompting: req.body.useDynamicPrompting !== false,
+        dynamicMetadata: dynamicMetadata
+
       },
       raw: llmResp.raw 
     });

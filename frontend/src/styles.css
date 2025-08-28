@@ -59,6 +59,10 @@ body {
   gap: 20px;
 }
 
+.form-row .checkbox-group {
+  margin-bottom: 0;
+}
+
 .form-group label {
   display: block;
   margin-bottom: 8px;
