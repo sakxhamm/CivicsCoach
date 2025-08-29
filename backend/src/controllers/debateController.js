@@ -3,8 +3,10 @@ const { callGemini } = require('../services/geminiService');
 const { retrieveChunks } = require('../services/similarityService');
 const { buildChainMessages } = require('../prompts/chainOfThoughtPrompt');
 const { ZeroShotPromptEngine } = require('../prompts/zeroShotPrompt');
+const { callGemini, getOptimalTopP } = require('../services/geminiService');
 
 const { callGemini, getOptimalTopK } = require('../services/geminiService');
+
 const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
 
 // Initialize zero-shot prompt engine
@@ -19,10 +21,15 @@ const { safeParseJSONMaybe } = require('../utils/jsonValidator');
 const zeroShotPromptEngine = new ZeroShotPromptEngine();
 const dynamicPromptEngine = new DynamicPromptEngine();
 
-
 // Load corpus data for retrieval
 const corpus = require('../../data/corpus_chunks.json');
 
+
+// Enhanced retrieval function with Top P optimization
+function retrieveChunks(query, topK = 4, context = 'constitutionalEducation', taskType = 'debate', proficiency = 'intermediate') {
+  console.log(`🔍 Retrieval Configuration:`);
+  console.log(`  Query: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`);
+  console.log(`  Top K: ${topK}`);
 // Enhanced retrieval function with Top K optimization
 function retrieveChunks(query, topK = 4, context = 'constitutionalEducation', taskType = 'debate', proficiency = 'intermediate') {
   // Get optimal Top K if not explicitly provided
@@ -32,6 +39,7 @@ function retrieveChunks(query, topK = 4, context = 'constitutionalEducation', ta
   console.log(`  Query: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`);
   console.log(`  Requested Top K: ${topK}`);
   console.log(`  Optimal Top K: ${optimalTopK}`);
+
   console.log(`  Context: ${context}`);
   console.log(`  Task Type: ${taskType}`);
   console.log(`  Proficiency: ${proficiency}`);
@@ -80,8 +88,12 @@ async function generateDebate(req, res) {
       topK = null, // Use null to trigger optimal Top K calculation
       metric = 'cosine', 
       proficiency = 'intermediate', 
+
+      temperature = 0.2, 
+      top_p = null, // Use null to trigger optimal Top P calculation
       temperature = null, 
       top_p = 1.0, 
+
       useCoT = true,
       useZeroShot = false,
       taskType = 'debate',
@@ -98,8 +110,7 @@ async function generateDebate(req, res) {
     // 1) RETRIEVE relevant chunks with Top K optimization
     const retrievedChunks = retrieveChunks(query, topK, context, taskType, proficiency);
     // 1) RETRIEVE relevant chunks
-    const retrievedChunks = retrieveChunks(query, topK);
-
+    const retrievedChunks = retrieveChunks(query, topK, context, taskType, proficiency);
 
     // 2) Build messages based on prompting strategy
     let messages;
@@ -124,6 +135,7 @@ async function generateDebate(req, res) {
         zeroShotFeatures: zeroShotPrompt.metadata.zeroShotFeatures
       };
 
+
     } else if (req.body.useDynamicPrompting !== false) {
       // Use dynamic prompting
       const dynamicPrompt = dynamicPromptEngine.generateDynamicPrompt(
@@ -137,6 +149,7 @@ async function generateDebate(req, res) {
         promptingStrategy: 'dynamic',
         ...dynamicPrompt.metadata
       };
+
 
     } else {
       // Use traditional chain-of-thought prompting
@@ -163,9 +176,13 @@ async function generateDebate(req, res) {
       );
     }
 
+
+    // 3) Call Gemini API with Top P optimization
+
     // 3) Call Gemini API with Top K optimization
 
     // 3) Call Gemini API with optimized temperature
+
     const llmResp = await callGemini({ 
       messages, 
       temperature, 
@@ -174,6 +191,9 @@ async function generateDebate(req, res) {
       taskType,
       query,
       proficiency,
+
+      customTopP: top_p
+
       customTopK: topK
       proficiency
     });
@@ -318,7 +338,6 @@ async function generateDebateWithZeroShot(req, res) {
       });
     }
 
-
     // 5) Return structured response with enhanced metadata
     res.json({ 
       ok: true, 
@@ -327,12 +346,20 @@ async function generateDebateWithZeroShot(req, res) {
         retrievedChunks: retrievedChunks.length,
         useCoT,
         temperature,
-        top_p,
+        top_p: llmResp.topP,
         tokens: llmResp.usage || { input: 0, output: 0 },
+
+        topP: llmResp.topP,
+        context: llmResp.context,
+        taskType: llmResp.taskType,
+        queryComplexity: llmResp.queryComplexity,
+        hasCreativeElements: llmResp.hasCreativeElements,
+
         topK: llmResp.topK,
         context: llmResp.context,
         taskType: llmResp.taskType,
         queryComplexity: llmResp.queryComplexity,
+
         proficiency: llmResp.proficiency,
         retrievalScores: retrievedChunks.map(chunk => ({
           id: chunk.id,
@@ -374,12 +401,22 @@ async function generateDebateWithZeroShot(req, res) {
           retrievedChunks: 0,
           useCoT: false,
           temperature: 0.2,
+
+          top_p: 0.85,
+          tokens: { input: 0, output: 0 },
+          topP: 0.85,
+          context: 'constitutionalEducation',
+          taskType: 'debate',
+          queryComplexity: 'moderate',
+          hasCreativeElements: false,
+
           top_p: 1.0,
           tokens: { input: 0, output: 0 },
           topK: 4,
           context: 'constitutionalEducation',
           taskType: 'debate',
           queryComplexity: 'moderate',
+
           proficiency: 'intermediate',
           retrievalScores: [],
           promptingStrategy: 'demo',
@@ -418,7 +455,13 @@ async function generateDebateWithZeroShot(req, res) {
         details: parsed.error,
         rawResponse: llmResp.text
       });
+    } else {
+      return res.status(500).json({ 
+        ok: false, 
+        error: err.message 
+      });
     }
+
 
     // 5) Return successful response
     return res.json({
@@ -446,6 +489,7 @@ async function generateDebateWithZeroShot(req, res) {
       ok: false,
       error: error.message || 'Internal server error'
     });
+
   }
 }
 

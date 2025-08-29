@@ -3,6 +3,53 @@ const axios = require("axios");
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
 
+// Top P Optimization System
+const TOP_P_PRESETS = {
+  // Context-based presets
+  constitutionalEducation: {
+    debate: { min: 0.7, max: 0.95, default: 0.85 },
+    analysis: { min: 0.8, max: 0.95, default: 0.9 },
+    comparison: { min: 0.75, max: 0.95, default: 0.85 },
+    explanation: { min: 0.8, max: 0.95, default: 0.9 },
+    quiz: { min: 0.7, max: 0.9, default: 0.8 }
+  },
+  academicResearch: {
+    debate: { min: 0.75, max: 0.95, default: 0.85 },
+    analysis: { min: 0.8, max: 0.95, default: 0.9 },
+    comparison: { min: 0.8, max: 0.95, default: 0.9 },
+    explanation: { min: 0.85, max: 0.95, default: 0.9 },
+    quiz: { min: 0.75, max: 0.9, default: 0.85 }
+  },
+  publicPolicy: {
+    debate: { min: 0.7, max: 0.95, default: 0.8 },
+    analysis: { min: 0.75, max: 0.95, default: 0.85 },
+    comparison: { min: 0.8, max: 0.95, default: 0.85 },
+    explanation: { min: 0.8, max: 0.95, default: 0.85 },
+    quiz: { min: 0.7, max: 0.9, default: 0.8 }
+  },
+  generalPublic: {
+    debate: { min: 0.6, max: 0.9, default: 0.75 },
+    analysis: { min: 0.7, max: 0.9, default: 0.8 },
+    comparison: { min: 0.7, max: 0.9, default: 0.8 },
+    explanation: { min: 0.75, max: 0.9, default: 0.8 },
+    quiz: { min: 0.6, max: 0.85, default: 0.75 }
+  },
+  creativeTasks: {
+    debate: { min: 0.8, max: 0.98, default: 0.9 },
+    analysis: { min: 0.85, max: 0.98, default: 0.9 },
+    comparison: { min: 0.8, max: 0.98, default: 0.9 },
+    explanation: { min: 0.8, max: 0.95, default: 0.85 },
+    quiz: { min: 0.75, max: 0.9, default: 0.8 }
+  }
+};
+
+// Query complexity analysis for Top P optimization
+function analyzeQueryComplexity(query) {
+  const words = query.trim().split(/\s+/).length;
+  const hasComplexTerms = /(doctrine|jurisdiction|constitutional|amendment|fundamental)/i.test(query);
+  const hasMultipleConcepts = /(and|or|versus|compared|difference)/i.test(query);
+  const hasCreativeElements = /(imagine|create|design|innovate|brainstorm)/i.test(query);
+
 
 // Top K Optimization System
 const TOP_K_PRESETS = {
@@ -49,6 +96,7 @@ function analyzeQueryComplexity(query) {
   const words = query.trim().split(/\s+/).length;
   const hasComplexTerms = /(doctrine|jurisdiction|constitutional|amendment|fundamental)/i.test(query);
   const hasMultipleConcepts = /(and|or|versus|versus|compared|difference)/i.test(query);
+
   
   let complexity = 'simple';
   if (words > 15 || hasComplexTerms || hasMultipleConcepts) {
@@ -57,6 +105,33 @@ function analyzeQueryComplexity(query) {
     complexity = 'moderate';
   }
   
+
+  return { complexity, hasCreativeElements };
+}
+
+// Get optimal Top P value
+function getOptimalTopP(context, taskType, queryComplexity, proficiency, customTopP = null) {
+  // If custom Top P is provided, use it (with bounds checking)
+  if (customTopP !== null && customTopP !== undefined) {
+    return Math.max(0.0, Math.min(1.0, customTopP));
+  }
+
+  // Get context-specific preset
+  const contextPresets = TOP_P_PRESETS[context] || TOP_P_PRESETS.constitutionalEducation;
+  const taskPreset = contextPresets[taskType] || contextPresets.debate;
+  
+  let optimalTopP = taskPreset.default;
+
+  // Adjust based on query complexity
+  switch (queryComplexity.complexity) {
+    case 'simple':
+      // Simple queries can use lower Top P for more focused responses
+      optimalTopP = Math.max(taskPreset.min, optimalTopP - 0.05);
+      break;
+    case 'complex':
+      // Complex queries benefit from higher Top P for more diverse responses
+      optimalTopP = Math.min(taskPreset.max, optimalTopP + 0.05);
+
   return complexity;
 }
 
@@ -80,12 +155,28 @@ function getOptimalTopK(context, taskType, queryComplexity, proficiency, customT
       break;
     case 'complex':
       optimalTopK = Math.min(taskPreset.max, optimalTopK + 2);
+
       break;
     case 'moderate':
     default:
       // Keep default value
       break;
   }
+
+  // Adjust based on creative elements
+  if (queryComplexity.hasCreativeElements) {
+    optimalTopP = Math.min(taskPreset.max, optimalTopP + 0.05);
+  }
+
+  // Adjust based on proficiency level
+  switch (proficiency) {
+    case 'beginner':
+      // Beginners benefit from more focused, consistent responses
+      optimalTopP = Math.max(taskPreset.min, optimalTopP - 0.05);
+      break;
+    case 'advanced':
+      // Advanced users can handle more diverse, creative responses
+      optimalTopP = Math.min(taskPreset.max, optimalTopP + 0.05);
 
   // Adjust based on proficiency level
   switch (proficiency) {
@@ -96,12 +187,17 @@ function getOptimalTopK(context, taskType, queryComplexity, proficiency, customT
     case 'advanced':
       // Advanced users can work with more focused results
       optimalTopK = Math.max(taskPreset.min, optimalTopK - 1);
+
       break;
     case 'intermediate':
     default:
       // Keep calculated value
       break;
   }
+
+
+  // Ensure Top P stays within valid bounds
+  return Math.max(0.0, Math.min(1.0, optimalTopP));
 
   // Ensure Top K stays within valid bounds
   return Math.max(1, Math.min(20, optimalTopK));
@@ -201,6 +297,7 @@ function getOptimalTemperature(context, taskType, proficiency, customTemperature
   
   // Ensure temperature stays within valid bounds
   return Math.max(0.0, Math.min(2.0, baseTemperature));
+
 }
 
 // Mock response for demo purposes when API is rate limited
@@ -268,6 +365,17 @@ const getMockResponse = (query, useCoT) => {
 
 /**
 
+ * Call Google Gemini API with Top P optimization
+ * @param {Array} messages - Array of messages (role: "user"/"assistant", content: "...")
+ * @param {number} temperature - Sampling temperature (0.0 to 2.0)
+ * @param {number} top_p - Top-p sampling parameter (0.0 to 1.0)
+ * @param {string} context - Context for Top P optimization (default: 'constitutionalEducation')
+ * @param {string} taskType - Task type for Top P optimization (default: 'debate')
+ * @param {string} query - Query for complexity analysis
+ * @param {string} proficiency - User proficiency level (default: 'intermediate')
+ * @param {number} customTopP - Custom Top P override (optional)
+
+
  * Call Google Gemini API with Top K optimization
  * @param {Array} messages - Array of messages (role: "user"/"assistant", content: "...")
  * @param {number} temperature - Sampling temperature (0.0 to 2.0)
@@ -277,15 +385,23 @@ const getMockResponse = (query, useCoT) => {
  * @param {string} query - Query for complexity analysis
  * @param {string} proficiency - User proficiency level (default: 'intermediate')
  * @param {number} customTopK - Custom Top K override (optional)
+
  */
 async function callGemini({ 
   messages, 
   temperature = 0.2, 
+
+  top_p = null,
+
   top_p = 1.0,
+
   context = 'constitutionalEducation',
   taskType = 'debate',
   query = '',
   proficiency = 'intermediate',
+
+  customTopP = null
+
   customTopK = null
 
  * Call Google Gemini API with optimized temperature settings
@@ -307,10 +423,28 @@ async function callGemini({
   proficiency = 'intermediate',
   maxOutputTokens = 2048
 
+
 }) {
   if (!GEMINI_KEY) {
     throw new Error("GEMINI_API_KEY is required. Please set it in your .env file.");
   }
+
+
+  // Analyze query complexity for Top P optimization
+  const queryComplexity = analyzeQueryComplexity(query);
+  
+  // Get optimal Top P value
+  const optimalTopP = getOptimalTopP(context, taskType, queryComplexity, proficiency, customTopP);
+
+  console.log(`🎯 Top P Configuration:`);
+  console.log(`  Context: ${context}`);
+  console.log(`  Task Type: ${taskType}`);
+  console.log(`  Query Complexity: ${queryComplexity.complexity}`);
+  console.log(`  Has Creative Elements: ${queryComplexity.hasCreativeElements}`);
+  console.log(`  Proficiency: ${proficiency}`);
+  console.log(`  Custom Top P: ${customTopP !== null ? customTopP : 'Not specified'}`);
+  console.log(`  Optimal Top P: ${optimalTopP}`);
+  console.log(`  Query: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`);
 
 
   // Analyze query complexity for Top K optimization
@@ -339,6 +473,7 @@ async function callGemini({
   console.log(`  Optimal Temperature: ${optimalTemperature}`);
 
 
+
   try {
     // Google Gemini expects a different input format
     const contents = messages.map(msg => ({
@@ -349,9 +484,15 @@ async function callGemini({
     const requestBody = {
       contents,
       generationConfig: {
+
+        temperature,
+        topP: optimalTopP,
+        maxOutputTokens: 2048,
+
         temperature: optimalTemperature,
         topP: top_p,
         maxOutputTokens,
+
         stopSequences: ["</reasoning>"]
       }
     };
@@ -381,6 +522,13 @@ async function callGemini({
       usage,
       raw: resp.data,
 
+      topP: optimalTopP,
+      context,
+      taskType,
+      queryComplexity: queryComplexity.complexity,
+      hasCreativeElements: queryComplexity.hasCreativeElements,
+
+
       topK: optimalTopK,
       context,
       taskType,
@@ -408,6 +556,13 @@ async function callGemini({
         usage: { input: 100, output: 200, total: 300 },
         raw: { demo: true, message: "Rate limited - using demo response" },
 
+        topP: optimalTopP,
+        context,
+        taskType,
+        queryComplexity: queryComplexity.complexity,
+        hasCreativeElements: queryComplexity.hasCreativeElements,
+
+
         topK: optimalTopK,
         context,
         taskType,
@@ -416,6 +571,7 @@ async function callGemini({
         temperature: optimalTemperature,
         context,
         taskType,
+
 
         proficiency
       };
@@ -428,9 +584,15 @@ async function callGemini({
 module.exports = { 
   callGemini, 
 
+  getOptimalTopP, 
+  TOP_P_PRESETS,
+  analyzeQueryComplexity 
+
+
   getOptimalTopK, 
   TOP_K_PRESETS,
   analyzeQueryComplexity 
   getOptimalTemperature, 
   TEMPERATURE_PRESETS 
+
 };
