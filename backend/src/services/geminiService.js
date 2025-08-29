@@ -3,6 +3,7 @@ const axios = require("axios");
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
 
+
 // Top K Optimization System
 const TOP_K_PRESETS = {
   // Context-based presets
@@ -104,6 +105,102 @@ function getOptimalTopK(context, taskType, queryComplexity, proficiency, customT
 
   // Ensure Top K stays within valid bounds
   return Math.max(1, Math.min(20, optimalTopK));
+
+/**
+ * Temperature Configuration for Different Use Cases
+ * 
+ * Temperature controls the randomness/creativity of AI responses:
+ * - 0.0: Most deterministic, consistent responses
+ * - 0.1-0.3: Low creativity, high consistency (good for factual content)
+ * - 0.4-0.7: Balanced creativity and consistency
+ * - 0.8-1.0: High creativity, more varied responses
+ * - 1.0+: Very creative, potentially unpredictable
+ */
+const TEMPERATURE_PRESETS = {
+  // Constitutional Education - High accuracy, low creativity
+  constitutionalEducation: {
+    debate: 0.1,        // Structured debates need consistency
+    analysis: 0.1,      // Legal analysis requires precision
+    comparison: 0.2,    // Comparisons benefit from slight variation
+    explanation: 0.3,   // Explanations can be slightly creative
+    quiz: 0.1           // Quiz questions need consistency
+  },
+  
+  // Academic Research - Balanced approach
+  academicResearch: {
+    debate: 0.2,        // Academic debates need some creativity
+    analysis: 0.15,     // Research analysis requires precision
+    comparison: 0.25,   // Academic comparisons benefit from insight
+    explanation: 0.3,   // Academic explanations need clarity
+    quiz: 0.15          // Academic quizzes need consistency
+  },
+  
+  // Public Policy - Practical and accessible
+  publicPolicy: {
+    debate: 0.3,        // Policy debates need practical insights
+    analysis: 0.25,     // Policy analysis needs clarity
+    comparison: 0.3,    // Policy comparisons need practical focus
+    explanation: 0.4,   // Policy explanations need accessibility
+    quiz: 0.2           // Policy quizzes need practical focus
+  },
+  
+  // General Public - More accessible and engaging
+  generalPublic: {
+    debate: 0.4,        // Public debates need engagement
+    analysis: 0.3,      // Public analysis needs accessibility
+    comparison: 0.4,    // Public comparisons need relatability
+    explanation: 0.5,   // Public explanations need engagement
+    quiz: 0.3           // Public quizzes need engagement
+  },
+  
+  // Creative Tasks - Higher creativity for innovative content
+  creative: {
+    debate: 0.6,        // Creative debates need innovation
+    analysis: 0.5,      // Creative analysis needs insight
+    comparison: 0.6,    // Creative comparisons need perspective
+    explanation: 0.7,   // Creative explanations need engagement
+    quiz: 0.5           // Creative quizzes need variety
+  }
+};
+
+/**
+ * Get appropriate temperature for a specific use case
+ * @param {string} context - The context (constitutionalEducation, academicResearch, etc.)
+ * @param {string} taskType - The type of task (debate, analysis, etc.)
+ * @param {string} proficiency - User proficiency level
+ * @param {number} customTemperature - Custom temperature override
+ * @returns {number} Appropriate temperature value
+ */
+function getOptimalTemperature(context, taskType, proficiency, customTemperature = null) {
+  // If custom temperature is provided, use it (with bounds checking)
+  if (customTemperature !== null && customTemperature !== undefined) {
+    return Math.max(0.0, Math.min(2.0, customTemperature));
+  }
+  
+  // Get context-specific temperature
+  const contextPresets = TEMPERATURE_PRESETS[context] || TEMPERATURE_PRESETS.constitutionalEducation;
+  let baseTemperature = contextPresets[taskType] || contextPresets.debate;
+  
+  // Adjust based on proficiency level
+  switch (proficiency) {
+    case 'beginner':
+      // Beginners need more consistency, reduce temperature
+      baseTemperature *= 0.8;
+      break;
+    case 'intermediate':
+      // Intermediate users get standard temperature
+      break;
+    case 'advanced':
+      // Advanced users can handle slightly more variation
+      baseTemperature *= 1.1;
+      break;
+    default:
+      // Default to intermediate
+      break;
+  }
+  
+  // Ensure temperature stays within valid bounds
+  return Math.max(0.0, Math.min(2.0, baseTemperature));
 }
 
 // Mock response for demo purposes when API is rate limited
@@ -170,6 +267,7 @@ const getMockResponse = (query, useCoT) => {
 };
 
 /**
+
  * Call Google Gemini API with Top K optimization
  * @param {Array} messages - Array of messages (role: "user"/"assistant", content: "...")
  * @param {number} temperature - Sampling temperature (0.0 to 2.0)
@@ -189,10 +287,31 @@ async function callGemini({
   query = '',
   proficiency = 'intermediate',
   customTopK = null
+
+ * Call Google Gemini API with optimized temperature settings
+ * @param {Array} messages - Array of messages (role: "user"/"assistant", content: "...")
+ * @param {Object} options - Configuration options
+ * @param {number} options.temperature - Sampling temperature (0.0 to 2.0)
+ * @param {number} options.top_p - Top-p sampling parameter (0.0 to 1.0)
+ * @param {string} options.context - Context for temperature optimization
+ * @param {string} options.taskType - Type of task for temperature optimization
+ * @param {string} options.proficiency - User proficiency level
+ * @param {number} options.maxOutputTokens - Maximum output tokens
+ */
+async function callGemini({ 
+  messages, 
+  temperature = null, 
+  top_p = 1.0, 
+  context = 'constitutionalEducation',
+  taskType = 'debate',
+  proficiency = 'intermediate',
+  maxOutputTokens = 2048
+
 }) {
   if (!GEMINI_KEY) {
     throw new Error("GEMINI_API_KEY is required. Please set it in your .env file.");
   }
+
 
   // Analyze query complexity for Top K optimization
   const queryComplexity = analyzeQueryComplexity(query);
@@ -209,6 +328,17 @@ async function callGemini({
   console.log(`  Optimal Top K: ${optimalTopK}`);
   console.log(`  Query: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`);
 
+  // Get optimal temperature if not explicitly provided
+  const optimalTemperature = getOptimalTemperature(context, taskType, proficiency, temperature);
+  
+  console.log(`🌡️ Temperature Configuration:`);
+  console.log(`  Context: ${context}`);
+  console.log(`  Task Type: ${taskType}`);
+  console.log(`  Proficiency: ${proficiency}`);
+  console.log(`  Custom Temperature: ${temperature !== null ? temperature : 'Not specified'}`);
+  console.log(`  Optimal Temperature: ${optimalTemperature}`);
+
+
   try {
     // Google Gemini expects a different input format
     const contents = messages.map(msg => ({
@@ -219,9 +349,9 @@ async function callGemini({
     const requestBody = {
       contents,
       generationConfig: {
-        temperature,
+        temperature: optimalTemperature,
         topP: top_p,
-        maxOutputTokens: 2048,
+        maxOutputTokens,
         stopSequences: ["</reasoning>"]
       }
     };
@@ -250,10 +380,16 @@ async function callGemini({
       text,
       usage,
       raw: resp.data,
+
       topK: optimalTopK,
       context,
       taskType,
       queryComplexity,
+
+      temperature: optimalTemperature,
+      context,
+      taskType,
+
       proficiency
     };
   } catch (err) {
@@ -271,10 +407,16 @@ async function callGemini({
         text: JSON.stringify(mockData),
         usage: { input: 100, output: 200, total: 300 },
         raw: { demo: true, message: "Rate limited - using demo response" },
+
         topK: optimalTopK,
         context,
         taskType,
         queryComplexity,
+
+        temperature: optimalTemperature,
+        context,
+        taskType,
+
         proficiency
       };
     } else {
@@ -285,7 +427,10 @@ async function callGemini({
 
 module.exports = { 
   callGemini, 
+
   getOptimalTopK, 
   TOP_K_PRESETS,
   analyzeQueryComplexity 
+  getOptimalTemperature, 
+  TEMPERATURE_PRESETS 
 };
