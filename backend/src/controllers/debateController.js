@@ -2,25 +2,29 @@
 const { buildChainMessages } = require('../prompts/chainOfThoughtPrompt');
 
 const { ZeroShotPromptEngine } = require('../prompts/zeroShotPrompt');
-const { callGemini } = require('../services/geminiService');
+const { callGemini, getOptimalTopP } = require('../services/geminiService');
 const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
 
 // Initialize zero-shot prompt engine
 const zeroShotPromptEngine = new ZeroShotPromptEngine();
 const { DynamicPromptEngine } = require('../prompts/dynamicPrompt');
-const { callGemini } = require('../services/geminiService');
-const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
 
 // Initialize dynamic prompt engine
 const dynamicPromptEngine = new DynamicPromptEngine();
 
-
 // Load corpus data for retrieval
 const corpus = require('../../data/corpus_chunks.json');
 
-// Simple similarity-based retrieval (for demo purposes)
-function retrieveChunks(query, topK = 4) {
-  // Simple keyword matching for demo
+// Enhanced retrieval function with Top P optimization
+function retrieveChunks(query, topK = 4, context = 'constitutionalEducation', taskType = 'debate', proficiency = 'intermediate') {
+  console.log(`🔍 Retrieval Configuration:`);
+  console.log(`  Query: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`);
+  console.log(`  Top K: ${topK}`);
+  console.log(`  Context: ${context}`);
+  console.log(`  Task Type: ${taskType}`);
+  console.log(`  Proficiency: ${proficiency}`);
+
+  // Simple keyword matching for demo (can be enhanced with vector search)
   const queryLower = query.toLowerCase();
   const scoredChunks = corpus.map(chunk => {
     const textLower = chunk.text.toLowerCase();
@@ -32,6 +36,11 @@ function retrieveChunks(query, topK = 4) {
       if (textLower.includes(keyword)) score += 1;
     });
     
+    // Bonus for constitutional terms
+    if (/(constitution|amendment|article|fundamental|rights|doctrine)/i.test(chunk.text)) {
+      score += 0.5;
+    }
+    
     return { ...chunk, score };
   });
   
@@ -42,7 +51,8 @@ function retrieveChunks(query, topK = 4) {
     .map(chunk => ({ 
       id: chunk.id, 
       text: chunk.text, 
-      metadata: chunk.metadata 
+      metadata: chunk.metadata,
+      score: chunk.score
     }));
 }
 
@@ -54,10 +64,11 @@ async function generate(req, res) {
       metric = 'cosine', 
       proficiency = 'intermediate', 
       temperature = 0.2, 
-      top_p = 1.0, 
+      top_p = null, // Use null to trigger optimal Top P calculation
       useCoT = true,
       useZeroShot = false,
-      taskType = 'debate'
+      taskType = 'debate',
+      context = 'constitutionalEducation'
     } = req.body;
 
     if (!query) {
@@ -68,8 +79,7 @@ async function generate(req, res) {
     }
 
     // 1) RETRIEVE relevant chunks
-    const retrievedChunks = retrieveChunks(query, topK);
-
+    const retrievedChunks = retrieveChunks(query, topK, context, taskType, proficiency);
 
     // 2) Build messages based on prompting strategy
     let messages;
@@ -95,24 +105,6 @@ async function generate(req, res) {
       };
     } else {
       // Use traditional chain-of-thought prompting
-
-    // 2) Build messages with dynamic prompting
-    let messages;
-    let dynamicMetadata = {};
-    
-    if (req.body.useDynamicPrompting !== false) {
-      // Use dynamic prompting
-      const dynamicPrompt = dynamicPromptEngine.generateDynamicPrompt(
-        query, 
-        proficiency, 
-        retrievedChunks,
-        { previousResponses: req.body.previousResponses || [] }
-      );
-      messages = dynamicPrompt.messages;
-      dynamicMetadata = dynamicPrompt.metadata;
-    } else {
-      // Fallback to original chain-of-thought prompt
-
       messages = buildChainMessages({ 
         audience: proficiency, 
         topic: query, 
@@ -127,7 +119,6 @@ async function generate(req, res) {
         examples: true,
         reasoning: useCoT ? 'enabled' : 'disabled'
       };
-
     }
 
     if (!useCoT) {
@@ -137,11 +128,16 @@ async function generate(req, res) {
       );
     }
 
-    // 3) Call Gemini API
+    // 3) Call Gemini API with Top P optimization
     const llmResp = await callGemini({ 
       messages, 
       temperature, 
-      top_p 
+      top_p,
+      context,
+      taskType,
+      query,
+      proficiency,
+      customTopP: top_p
     });
 
     // 4) Parse & validate JSON
@@ -165,7 +161,7 @@ async function generate(req, res) {
       });
     }
 
-    // 5) Return structured response with metadata
+    // 5) Return structured response with enhanced metadata
     res.json({ 
       ok: true, 
       data: parsed.data, 
@@ -173,13 +169,19 @@ async function generate(req, res) {
         retrievedChunks: retrievedChunks.length,
         useCoT,
         temperature,
-        top_p,
+        top_p: llmResp.topP,
         tokens: llmResp.usage || { input: 0, output: 0 },
-
+        topP: llmResp.topP,
+        context: llmResp.context,
+        taskType: llmResp.taskType,
+        queryComplexity: llmResp.queryComplexity,
+        hasCreativeElements: llmResp.hasCreativeElements,
+        proficiency: llmResp.proficiency,
+        retrievalScores: retrievedChunks.map(chunk => ({
+          id: chunk.id,
+          score: chunk.score
+        })),
         ...promptMetadata
-        dynamicPrompting: req.body.useDynamicPrompting !== false,
-        dynamicMetadata: dynamicMetadata
-
       },
       raw: llmResp.raw 
     });
@@ -208,25 +210,33 @@ async function generate(req, res) {
         ]
       };
       
-      return res.json({ 
-        ok: true, 
-        data: mockData, 
+      return res.json({
+        ok: true,
+        data: mockData,
         metadata: {
           retrievedChunks: 0,
-          useCoT: req.body.useCoT || true,
-          temperature: req.body.temperature || 0.2,
-          top_p: req.body.top_p || 1.0,
-          tokens: { input: 100, output: 200, total: 300 },
+          useCoT: false,
+          temperature: 0.2,
+          top_p: 0.85,
+          tokens: { input: 0, output: 0 },
+          topP: 0.85,
+          context: 'constitutionalEducation',
+          taskType: 'debate',
+          queryComplexity: 'moderate',
+          hasCreativeElements: false,
+          proficiency: 'intermediate',
+          retrievalScores: [],
+          promptingStrategy: 'demo',
           demo: true
         },
         raw: { demo: true, message: "Rate limited - using demo response" }
       });
+    } else {
+      return res.status(500).json({ 
+        ok: false, 
+        error: err.message 
+      });
     }
-    
-    res.status(500).json({ 
-      ok: false, 
-      error: err.message 
-    });
   }
 }
 
