@@ -2,25 +2,34 @@
 const { buildChainMessages } = require('../prompts/chainOfThoughtPrompt');
 
 const { ZeroShotPromptEngine } = require('../prompts/zeroShotPrompt');
-const { callGemini } = require('../services/geminiService');
+const { callGemini, estimateTokens } = require('../services/geminiService');
 const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
 
 // Initialize zero-shot prompt engine
 const zeroShotPromptEngine = new ZeroShotPromptEngine();
 const { DynamicPromptEngine } = require('../prompts/dynamicPrompt');
-const { callGemini } = require('../services/geminiService');
-const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
 
 // Initialize dynamic prompt engine
 const dynamicPromptEngine = new DynamicPromptEngine();
 
-
 // Load corpus data for retrieval
 const corpus = require('../../data/corpus_chunks.json');
 
-// Simple similarity-based retrieval (for demo purposes)
+// Enhanced retrieval function with token analysis
 function retrieveChunks(query, topK = 4) {
-  // Simple keyword matching for demo
+  console.log(`🔍 Retrieval Configuration:`);
+  console.log(`  Query: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`);
+  console.log(`  Top K: ${topK}`);
+  
+  // Analyze query tokens
+  const queryTokenInfo = estimateTokens(query);
+  console.log(`  Query Token Analysis:`);
+  console.log(`    Estimated Tokens: ${queryTokenInfo.estimated}`);
+  console.log(`    Words: ${queryTokenInfo.words}`);
+  console.log(`    Characters: ${queryTokenInfo.characters}`);
+  console.log(`    Content Type: ${queryTokenInfo.contentType}`);
+
+  // Simple keyword matching for demo (can be enhanced with vector search)
   const queryLower = query.toLowerCase();
   const scoredChunks = corpus.map(chunk => {
     const textLower = chunk.text.toLowerCase();
@@ -32,18 +41,36 @@ function retrieveChunks(query, topK = 4) {
       if (textLower.includes(keyword)) score += 1;
     });
     
+    // Bonus for constitutional terms
+    if (/(constitution|amendment|article|fundamental|rights|doctrine)/i.test(chunk.text)) {
+      score += 0.5;
+    }
+    
     return { ...chunk, score };
   });
   
   // Sort by score and return top K
-  return scoredChunks
+  const retrievedChunks = scoredChunks
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)
     .map(chunk => ({ 
       id: chunk.id, 
       text: chunk.text, 
-      metadata: chunk.metadata 
+      metadata: chunk.metadata,
+      score: chunk.score
     }));
+  
+  // Analyze retrieved chunks tokens
+  const totalRetrievedTokens = retrievedChunks.reduce((total, chunk) => {
+    return total + estimateTokens(chunk.text).estimated;
+  }, 0);
+  
+  console.log(`  Retrieved Chunks Token Analysis:`);
+  console.log(`    Total Retrieved Tokens: ${totalRetrievedTokens}`);
+  console.log(`    Average Tokens per Chunk: ${Math.round(totalRetrievedTokens / retrievedChunks.length)}`);
+  console.log('');
+  
+  return retrievedChunks;
 }
 
 async function generate(req, res) {
@@ -67,9 +94,21 @@ async function generate(req, res) {
       });
     }
 
+    // Log initial query token analysis
+    console.log('\n🚀 DEBATE GENERATION STARTED');
+    console.log('═'.repeat(60));
+    console.log(`📝 Query: "${query}"`);
+    console.log(`👤 Proficiency: ${proficiency}`);
+    console.log(`🎯 Task Type: ${taskType}`);
+    console.log(`🌡️  Temperature: ${temperature}`);
+    console.log(`🎲 Top P: ${top_p}`);
+    console.log(`🔗 Use CoT: ${useCoT}`);
+    console.log(`⚡ Use Zero-Shot: ${useZeroShot}`);
+    console.log('═'.repeat(60));
+    console.log('');
+
     // 1) RETRIEVE relevant chunks
     const retrievedChunks = retrieveChunks(query, topK);
-
 
     // 2) Build messages based on prompting strategy
     let messages;
@@ -95,24 +134,6 @@ async function generate(req, res) {
       };
     } else {
       // Use traditional chain-of-thought prompting
-
-    // 2) Build messages with dynamic prompting
-    let messages;
-    let dynamicMetadata = {};
-    
-    if (req.body.useDynamicPrompting !== false) {
-      // Use dynamic prompting
-      const dynamicPrompt = dynamicPromptEngine.generateDynamicPrompt(
-        query, 
-        proficiency, 
-        retrievedChunks,
-        { previousResponses: req.body.previousResponses || [] }
-      );
-      messages = dynamicPrompt.messages;
-      dynamicMetadata = dynamicPrompt.metadata;
-    } else {
-      // Fallback to original chain-of-thought prompt
-
       messages = buildChainMessages({ 
         audience: proficiency, 
         topic: query, 
@@ -127,7 +148,6 @@ async function generate(req, res) {
         examples: true,
         reasoning: useCoT ? 'enabled' : 'disabled'
       };
-
     }
 
     if (!useCoT) {
@@ -137,11 +157,24 @@ async function generate(req, res) {
       );
     }
 
-    // 3) Call Gemini API
+    // Log prompt token analysis
+    console.log('📋 PROMPT TOKEN ANALYSIS');
+    console.log('═'.repeat(40));
+    console.log(`Total Messages: ${messages.length}`);
+    messages.forEach((msg, index) => {
+      const tokenInfo = estimateTokens(msg.content);
+      console.log(`Message ${index + 1} [${msg.role}]: ${tokenInfo.estimated} tokens`);
+      console.log(`  Content: "${msg.content.substring(0, 80)}${msg.content.length > 80 ? '...' : ''}"`);
+    });
+    console.log('═'.repeat(40));
+    console.log('');
+
+    // 3) Call Gemini API with token logging
     const llmResp = await callGemini({ 
       messages, 
       temperature, 
-      top_p 
+      top_p,
+      query
     });
 
     // 4) Parse & validate JSON
@@ -165,7 +198,18 @@ async function generate(req, res) {
       });
     }
 
-    // 5) Return structured response with metadata
+    // Log final token summary
+    console.log('📊 FINAL TOKEN SUMMARY');
+    console.log('═'.repeat(40));
+    console.log(`Total Input Tokens: ${llmResp.tokenAnalysis.input.totalEstimatedTokens}`);
+    console.log(`Total Output Tokens: ${llmResp.tokenAnalysis.output}`);
+    console.log(`Total Tokens Used: ${llmResp.tokenAnalysis.total}`);
+    console.log(`Token Efficiency: ${llmResp.tokenAnalysis.efficiency.toFixed(2)}`);
+    console.log(`Estimated Cost: $${llmResp.tokenAnalysis.costEstimate.toFixed(6)}`);
+    console.log('═'.repeat(40));
+    console.log('');
+
+    // 5) Return structured response with enhanced metadata
     res.json({ 
       ok: true, 
       data: parsed.data, 
@@ -175,11 +219,15 @@ async function generate(req, res) {
         temperature,
         top_p,
         tokens: llmResp.usage || { input: 0, output: 0 },
-
+        tokenAnalysis: {
+          input: llmResp.tokenAnalysis.input,
+          output: llmResp.tokenAnalysis.output,
+          total: llmResp.tokenAnalysis.total,
+          efficiency: llmResp.tokenAnalysis.efficiency,
+          costEstimate: llmResp.tokenAnalysis.costEstimate,
+          timestamp: llmResp.tokenAnalysis.timestamp
+        },
         ...promptMetadata
-        dynamicPrompting: req.body.useDynamicPrompting !== false,
-        dynamicMetadata: dynamicMetadata
-
       },
       raw: llmResp.raw 
     });
@@ -208,25 +256,38 @@ async function generate(req, res) {
         ]
       };
       
-      return res.json({ 
-        ok: true, 
-        data: mockData, 
+      // Estimate tokens for demo response
+      const demoTokenInfo = estimateTokens(JSON.stringify(mockData));
+      
+      return res.json({
+        ok: true,
+        data: mockData,
         metadata: {
           retrievedChunks: 0,
-          useCoT: req.body.useCoT || true,
-          temperature: req.body.temperature || 0.2,
-          top_p: req.body.top_p || 1.0,
-          tokens: { input: 100, output: 200, total: 300 },
+          useCoT: false,
+          temperature: 0.2,
+          top_p: 1.0,
+          tokens: { input: 0, output: 0 },
+          tokenAnalysis: {
+            input: { totalEstimatedTokens: 0, totalMessages: 0, messageBreakdown: [], contentAnalysis: { constitutional: 0, academic: 0, creative: 0, standard: 0 } },
+            output: demoTokenInfo.estimated,
+            total: demoTokenInfo.estimated,
+            efficiency: 0,
+            costEstimate: (demoTokenInfo.estimated / 1000) * 0.0005,
+            timestamp: new Date().toISOString(),
+            demo: true
+          },
+          promptingStrategy: 'demo',
           demo: true
         },
         raw: { demo: true, message: "Rate limited - using demo response" }
       });
+    } else {
+      return res.status(500).json({ 
+        ok: false, 
+        error: err.message 
+      });
     }
-    
-    res.status(500).json({ 
-      ok: false, 
-      error: err.message 
-    });
   }
 }
 
