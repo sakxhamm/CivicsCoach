@@ -3,6 +3,109 @@ const axios = require("axios");
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
 
+// Top K Optimization System
+const TOP_K_PRESETS = {
+  // Context-based presets
+  constitutionalEducation: {
+    debate: { min: 3, max: 6, default: 4 },
+    analysis: { min: 4, max: 8, default: 5 },
+    comparison: { min: 5, max: 10, default: 6 },
+    explanation: { min: 3, max: 7, default: 4 },
+    quiz: { min: 2, max: 5, default: 3 }
+  },
+  academicResearch: {
+    debate: { min: 4, max: 8, default: 5 },
+    analysis: { min: 5, max: 10, default: 6 },
+    comparison: { min: 6, max: 12, default: 8 },
+    explanation: { min: 4, max: 8, default: 5 },
+    quiz: { min: 3, max: 6, default: 4 }
+  },
+  publicPolicy: {
+    debate: { min: 3, max: 7, default: 4 },
+    analysis: { min: 4, max: 8, default: 5 },
+    comparison: { min: 5, max: 10, default: 6 },
+    explanation: { min: 3, max: 6, default: 4 },
+    quiz: { min: 2, max: 5, default: 3 }
+  },
+  generalPublic: {
+    debate: { min: 2, max: 5, default: 3 },
+    analysis: { min: 3, max: 6, default: 4 },
+    comparison: { min: 4, max: 8, default: 5 },
+    explanation: { min: 2, max: 5, default: 3 },
+    quiz: { min: 2, max: 4, default: 3 }
+  },
+  creativeTasks: {
+    debate: { min: 4, max: 10, default: 6 },
+    analysis: { min: 5, max: 12, default: 7 },
+    comparison: { min: 6, max: 15, default: 8 },
+    explanation: { min: 4, max: 8, default: 5 },
+    quiz: { min: 3, max: 7, default: 4 }
+  }
+};
+
+// Query complexity analysis
+function analyzeQueryComplexity(query) {
+  const words = query.trim().split(/\s+/).length;
+  const hasComplexTerms = /(doctrine|jurisdiction|constitutional|amendment|fundamental)/i.test(query);
+  const hasMultipleConcepts = /(and|or|versus|versus|compared|difference)/i.test(query);
+  
+  let complexity = 'simple';
+  if (words > 15 || hasComplexTerms || hasMultipleConcepts) {
+    complexity = 'complex';
+  } else if (words > 8 || hasComplexTerms) {
+    complexity = 'moderate';
+  }
+  
+  return complexity;
+}
+
+// Get optimal Top K value
+function getOptimalTopK(context, taskType, queryComplexity, proficiency, customTopK = null) {
+  // If custom Top K is provided, use it (with bounds checking)
+  if (customTopK !== null && customTopK !== undefined) {
+    return Math.max(1, Math.min(20, customTopK));
+  }
+
+  // Get context-specific preset
+  const contextPresets = TOP_K_PRESETS[context] || TOP_K_PRESETS.constitutionalEducation;
+  const taskPreset = contextPresets[taskType] || contextPresets.debate;
+  
+  let optimalTopK = taskPreset.default;
+
+  // Adjust based on query complexity
+  switch (queryComplexity) {
+    case 'simple':
+      optimalTopK = Math.max(taskPreset.min, optimalTopK - 1);
+      break;
+    case 'complex':
+      optimalTopK = Math.min(taskPreset.max, optimalTopK + 2);
+      break;
+    case 'moderate':
+    default:
+      // Keep default value
+      break;
+  }
+
+  // Adjust based on proficiency level
+  switch (proficiency) {
+    case 'beginner':
+      // Beginners need more context, increase Top K slightly
+      optimalTopK = Math.min(taskPreset.max, optimalTopK + 1);
+      break;
+    case 'advanced':
+      // Advanced users can work with more focused results
+      optimalTopK = Math.max(taskPreset.min, optimalTopK - 1);
+      break;
+    case 'intermediate':
+    default:
+      // Keep calculated value
+      break;
+  }
+
+  // Ensure Top K stays within valid bounds
+  return Math.max(1, Math.min(20, optimalTopK));
+}
+
 // Mock response for demo purposes when API is rate limited
 const getMockResponse = (query, useCoT) => {
   const mockResponses = {
@@ -67,15 +170,44 @@ const getMockResponse = (query, useCoT) => {
 };
 
 /**
- * Call Google Gemini API
+ * Call Google Gemini API with Top K optimization
  * @param {Array} messages - Array of messages (role: "user"/"assistant", content: "...")
  * @param {number} temperature - Sampling temperature (0.0 to 2.0)
  * @param {number} top_p - Top-p sampling parameter (0.0 to 1.0)
+ * @param {string} context - Context for Top K optimization (default: 'constitutionalEducation')
+ * @param {string} taskType - Task type for Top K optimization (default: 'debate')
+ * @param {string} query - Query for complexity analysis
+ * @param {string} proficiency - User proficiency level (default: 'intermediate')
+ * @param {number} customTopK - Custom Top K override (optional)
  */
-async function callGemini({ messages, temperature = 0.2, top_p = 1.0 }) {
+async function callGemini({ 
+  messages, 
+  temperature = 0.2, 
+  top_p = 1.0,
+  context = 'constitutionalEducation',
+  taskType = 'debate',
+  query = '',
+  proficiency = 'intermediate',
+  customTopK = null
+}) {
   if (!GEMINI_KEY) {
     throw new Error("GEMINI_API_KEY is required. Please set it in your .env file.");
   }
+
+  // Analyze query complexity for Top K optimization
+  const queryComplexity = analyzeQueryComplexity(query);
+  
+  // Get optimal Top K value
+  const optimalTopK = getOptimalTopK(context, taskType, queryComplexity, proficiency, customTopK);
+
+  console.log(`🔍 Top K Configuration:`);
+  console.log(`  Context: ${context}`);
+  console.log(`  Task Type: ${taskType}`);
+  console.log(`  Query Complexity: ${queryComplexity}`);
+  console.log(`  Proficiency: ${proficiency}`);
+  console.log(`  Custom Top K: ${customTopK !== null ? customTopK : 'Not specified'}`);
+  console.log(`  Optimal Top K: ${optimalTopK}`);
+  console.log(`  Query: "${query.substring(0, 50)}${query.length > 50 ? '...' : ''}"`);
 
   try {
     // Google Gemini expects a different input format
@@ -117,7 +249,12 @@ async function callGemini({ messages, temperature = 0.2, top_p = 1.0 }) {
     return {
       text,
       usage,
-      raw: resp.data
+      raw: resp.data,
+      topK: optimalTopK,
+      context,
+      taskType,
+      queryComplexity,
+      proficiency
     };
   } catch (err) {
     console.error("Gemini API call error:", err.response?.data || err.message);
@@ -127,13 +264,18 @@ async function callGemini({ messages, temperature = 0.2, top_p = 1.0 }) {
     } else if (err.response?.status === 429) {
       // Return mock response for rate limiting
       console.log("API rate limited, returning demo response");
-      const query = messages[messages.length - 1]?.content || "";
-      const mockData = getMockResponse(query, true);
+      const queryText = messages[messages.length - 1]?.content || "";
+      const mockData = getMockResponse(queryText, true);
       
       return {
         text: JSON.stringify(mockData),
         usage: { input: 100, output: 200, total: 300 },
-        raw: { demo: true, message: "Rate limited - using demo response" }
+        raw: { demo: true, message: "Rate limited - using demo response" },
+        topK: optimalTopK,
+        context,
+        taskType,
+        queryComplexity,
+        proficiency
       };
     } else {
       throw new Error(`Gemini API error: ${err.response?.data?.error?.message || err.message}`);
@@ -141,4 +283,9 @@ async function callGemini({ messages, temperature = 0.2, top_p = 1.0 }) {
   }
 }
 
-module.exports = { callGemini };
+module.exports = { 
+  callGemini, 
+  getOptimalTopK, 
+  TOP_K_PRESETS,
+  analyzeQueryComplexity 
+};
