@@ -1,63 +1,31 @@
 // backend/src/controllers/debateController.js
+const { callGemini } = require('../services/geminiService');
+const { retrieveChunks } = require('../services/similarityService');
 const { buildChainMessages } = require('../prompts/chainOfThoughtPrompt');
-
 const { ZeroShotPromptEngine } = require('../prompts/zeroShotPrompt');
-const { callGemini } = require('../services/geminiService');
-const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
-
-// Initialize zero-shot prompt engine
-const zeroShotPromptEngine = new ZeroShotPromptEngine();
 const { DynamicPromptEngine } = require('../prompts/dynamicPrompt');
-const { callGemini } = require('../services/geminiService');
-const { safeParseJSONMaybe, validateDebateSchema } = require('../utils/jsonValidator');
+const { safeParseJSONMaybe } = require('../utils/jsonValidator');
 
-// Initialize dynamic prompt engine
+// Initialize prompting engines
+const zeroShotPromptEngine = new ZeroShotPromptEngine();
 const dynamicPromptEngine = new DynamicPromptEngine();
 
-
-// Load corpus data for retrieval
-const corpus = require('../../data/corpus_chunks.json');
-
-// Simple similarity-based retrieval (for demo purposes)
-function retrieveChunks(query, topK = 4) {
-  // Simple keyword matching for demo
-  const queryLower = query.toLowerCase();
-  const scoredChunks = corpus.map(chunk => {
-    const textLower = chunk.text.toLowerCase();
-    let score = 0;
-    
-    // Simple keyword scoring
-    const keywords = queryLower.split(' ');
-    keywords.forEach(keyword => {
-      if (textLower.includes(keyword)) score += 1;
-    });
-    
-    return { ...chunk, score };
-  });
-  
-  // Sort by score and return top K
-  return scoredChunks
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK)
-    .map(chunk => ({ 
-      id: chunk.id, 
-      text: chunk.text, 
-      metadata: chunk.metadata 
-    }));
-}
-
-async function generate(req, res) {
+/**
+ * Generate a debate using the specified prompting strategy
+ */
+async function generateDebate(req, res) {
   try {
     const { 
       query, 
       topK = 4, 
       metric = 'cosine', 
       proficiency = 'intermediate', 
-      temperature = 0.2, 
+      temperature = null, 
       top_p = 1.0, 
       useCoT = true,
       useZeroShot = false,
-      taskType = 'debate'
+      taskType = 'debate',
+      context = 'constitutionalEducation'
     } = req.body;
 
     if (!query) {
@@ -69,7 +37,6 @@ async function generate(req, res) {
 
     // 1) RETRIEVE relevant chunks
     const retrievedChunks = retrieveChunks(query, topK);
-
 
     // 2) Build messages based on prompting strategy
     let messages;
@@ -93,14 +60,7 @@ async function generate(req, res) {
         constraints: zeroShotPrompt.metadata.constraints,
         zeroShotFeatures: zeroShotPrompt.metadata.zeroShotFeatures
       };
-    } else {
-      // Use traditional chain-of-thought prompting
-
-    // 2) Build messages with dynamic prompting
-    let messages;
-    let dynamicMetadata = {};
-    
-    if (req.body.useDynamicPrompting !== false) {
+    } else if (req.body.useDynamicPrompting !== false) {
       // Use dynamic prompting
       const dynamicPrompt = dynamicPromptEngine.generateDynamicPrompt(
         query, 
@@ -109,10 +69,12 @@ async function generate(req, res) {
         { previousResponses: req.body.previousResponses || [] }
       );
       messages = dynamicPrompt.messages;
-      dynamicMetadata = dynamicPrompt.metadata;
+      promptMetadata = {
+        promptingStrategy: 'dynamic',
+        ...dynamicPrompt.metadata
+      };
     } else {
-      // Fallback to original chain-of-thought prompt
-
+      // Use traditional chain-of-thought prompting
       messages = buildChainMessages({ 
         audience: proficiency, 
         topic: query, 
@@ -127,7 +89,6 @@ async function generate(req, res) {
         examples: true,
         reasoning: useCoT ? 'enabled' : 'disabled'
       };
-
     }
 
     if (!useCoT) {
@@ -137,97 +98,300 @@ async function generate(req, res) {
       );
     }
 
-    // 3) Call Gemini API
+    // 3) Call Gemini API with optimized temperature
     const llmResp = await callGemini({ 
       messages, 
       temperature, 
-      top_p 
+      top_p,
+      context,
+      taskType,
+      proficiency
     });
 
     // 4) Parse & validate JSON
     const parsed = safeParseJSONMaybe(llmResp.text);
     if (!parsed.ok) {
-      return res.status(500).json({ 
-        ok: false, 
-        error: 'Could not parse model output', 
-        details: parsed.error, 
-        raw: llmResp.text 
+      return res.status(500).json({
+        ok: false,
+        error: 'Failed to parse AI response',
+        details: parsed.error,
+        rawResponse: llmResp.text
       });
     }
 
-    const valid = validateDebateSchema(parsed.data);
-    if (!valid.ok) {
-      return res.status(500).json({ 
-        ok: false, 
-        error: 'Schema validation failed', 
-        details: valid.error, 
-        parsed: parsed.data 
-      });
-    }
-
-    // 5) Return structured response with metadata
-    res.json({ 
-      ok: true, 
-      data: parsed.data, 
+    // 5) Return successful response
+    return res.json({
+      ok: true,
+      data: parsed.data,
       metadata: {
-        retrievedChunks: retrievedChunks.length,
-        useCoT,
-        temperature,
-        top_p,
-        tokens: llmResp.usage || { input: 0, output: 0 },
-
-        ...promptMetadata
-        dynamicPrompting: req.body.useDynamicPrompting !== false,
-        dynamicMetadata: dynamicMetadata
-
-      },
-      raw: llmResp.raw 
+        ...promptMetadata,
+        temperature: llmResp.temperature,
+        context: llmResp.context,
+        taskType: llmResp.taskType,
+        proficiency: llmResp.proficiency,
+        usage: llmResp.usage,
+        retrievedChunks: retrievedChunks.length
+      }
     });
-  } catch (err) {
-    console.error('Debate generation error:', err);
-    
-    // Handle rate limit specifically
-    if (err.message.includes('Rate limit exceeded')) {
-      // Return a demo response for rate limited cases
-      const mockData = {
-        stance: "This is a demo response. The actual AI service is currently rate limited. Please try again later or contact support for API access.",
-        counterStance: "In a real implementation, this would contain the opposing viewpoint generated by the AI model using Chain of Thought reasoning.",
-        citations: [
-          {
-            id: "demo",
-            source: "Demo Mode",
-            snippet: "This is a placeholder citation. Real citations would be retrieved from the constitutional corpus."
-          }
-        ],
-        quiz: [
-          {
-            q: "This is a demo quiz question. Real questions would be generated by the AI model.",
-            options: ["Option A", "Option B", "Option C", "Option D"],
-            answerIndex: 0
-          }
-        ]
-      };
-      
-      return res.json({ 
-        ok: true, 
-        data: mockData, 
-        metadata: {
-          retrievedChunks: 0,
-          useCoT: req.body.useCoT || true,
-          temperature: req.body.temperature || 0.2,
-          top_p: req.body.top_p || 1.0,
-          tokens: { input: 100, output: 200, total: 300 },
-          demo: true
-        },
-        raw: { demo: true, message: "Rate limited - using demo response" }
-      });
-    }
-    
-    res.status(500).json({ 
-      ok: false, 
-      error: err.message 
+
+  } catch (error) {
+    console.error('Debate generation error:', error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message || 'Internal server error'
     });
   }
 }
 
-module.exports = { generate };
+/**
+ * Generate a debate with chain-of-thought prompting
+ */
+async function generateDebateWithCoT(req, res) {
+  try {
+    const { 
+      query, 
+      topK = 4, 
+      metric = 'cosine', 
+      proficiency = 'intermediate', 
+      temperature = null, 
+      top_p = 1.0,
+      context = 'constitutionalEducation'
+    } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Query is required' 
+      });
+    }
+
+    // 1) RETRIEVE relevant chunks
+    const retrievedChunks = retrieveChunks(query, topK);
+
+    // 2) Build chain-of-thought messages
+    const messages = buildChainMessages({ 
+      audience: proficiency, 
+      topic: query, 
+      retrievedChunks, 
+      minCitations: 2, 
+      proficiency, 
+      examples: true 
+    });
+
+    // 3) Call Gemini API with optimized temperature
+    const llmResp = await callGemini({ 
+      messages, 
+      temperature, 
+      top_p,
+      context,
+      taskType: 'debate',
+      proficiency
+    });
+
+    // 4) Parse & validate JSON
+    const parsed = safeParseJSONMaybe(llmResp.text);
+    if (!parsed.ok) {
+      return res.status(500).json({
+        ok: false,
+        error: 'Failed to parse AI response',
+        details: parsed.error,
+        rawResponse: llmResp.text
+      });
+    }
+
+    // 5) Return successful response
+    return res.json({
+      ok: true,
+      data: parsed.data,
+      metadata: {
+        promptingStrategy: 'chain-of-thought',
+        examples: true,
+        reasoning: 'enabled',
+        temperature: llmResp.temperature,
+        context: llmResp.context,
+        taskType: llmResp.taskType,
+        proficiency: llmResp.proficiency,
+        usage: llmResp.usage,
+        retrievedChunks: retrievedChunks.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Chain-of-thought debate generation error:', error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+}
+
+/**
+ * Generate a debate with zero-shot prompting
+ */
+async function generateDebateWithZeroShot(req, res) {
+  try {
+    const { 
+      query, 
+      topK = 4, 
+      metric = 'cosine', 
+      proficiency = 'intermediate', 
+      temperature = null, 
+      top_p = 1.0,
+      taskType = 'debate',
+      context = 'constitutionalEducation'
+    } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Query is required' 
+      });
+    }
+
+    // 1) RETRIEVE relevant chunks
+    const retrievedChunks = retrieveChunks(query, topK);
+
+    // 2) Generate zero-shot prompt
+    const zeroShotPrompt = zeroShotPromptEngine.generateZeroShotPrompt(
+      taskType,
+      query,
+      proficiency,
+      retrievedChunks,
+      { additionalContext: req.body.additionalContext }
+    );
+
+    // 3) Call Gemini API with optimized temperature
+    const llmResp = await callGemini({ 
+      messages: zeroShotPrompt.messages, 
+      temperature, 
+      top_p,
+      context,
+      taskType,
+      proficiency
+    });
+
+    // 4) Parse & validate JSON
+    const parsed = safeParseJSONMaybe(llmResp.text);
+    if (!parsed.ok) {
+      return res.status(500).json({
+        ok: false,
+        error: 'Failed to parse AI response',
+        details: parsed.error,
+        rawResponse: llmResp.text
+      });
+    }
+
+    // 5) Return successful response
+    return res.json({
+      ok: true,
+      data: parsed.data,
+      metadata: {
+        promptingStrategy: 'zero-shot',
+        taskType: zeroShotPrompt.metadata.taskType,
+        taskDescription: zeroShotPrompt.metadata.taskDescription,
+        outputFormat: zeroShotPrompt.metadata.outputFormat,
+        constraints: zeroShotPrompt.metadata.constraints,
+        zeroShotFeatures: zeroShotPrompt.metadata.zeroShotFeatures,
+        temperature: llmResp.temperature,
+        context: llmResp.context,
+        taskType: llmResp.taskType,
+        proficiency: llmResp.proficiency,
+        usage: llmResp.usage,
+        retrievedChunks: retrievedChunks.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Zero-shot debate generation error:', error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+}
+
+/**
+ * Generate a debate with dynamic prompting
+ */
+async function generateDebateWithDynamicPrompting(req, res) {
+  try {
+    const { 
+      query, 
+      topK = 4, 
+      metric = 'cosine', 
+      proficiency = 'intermediate', 
+      temperature = null, 
+      top_p = 1.0,
+      context = 'constitutionalEducation'
+    } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Query is required' 
+      });
+    }
+
+    // 1) RETRIEVE relevant chunks
+    const retrievedChunks = retrieveChunks(query, topK);
+
+    // 2) Generate dynamic prompt
+    const dynamicPrompt = dynamicPromptEngine.generateDynamicPrompt(
+      query, 
+      proficiency, 
+      retrievedChunks,
+      { previousResponses: req.body.previousResponses || [] }
+    );
+
+    // 3) Call Gemini API with optimized temperature
+    const llmResp = await callGemini({ 
+      messages: dynamicPrompt.messages, 
+      temperature, 
+      top_p,
+      context,
+      taskType: 'debate',
+      proficiency
+    });
+
+    // 4) Parse & validate JSON
+    const parsed = safeParseJSONMaybe(llmResp.text);
+    if (!parsed.ok) {
+      return res.status(500).json({
+        ok: false,
+        error: 'Failed to parse AI response',
+        details: parsed.error,
+        rawResponse: llmResp.text
+      });
+    }
+
+    // 5) Return successful response
+    return res.json({
+      ok: true,
+      data: parsed.data,
+      metadata: {
+        promptingStrategy: 'dynamic',
+        ...dynamicPrompt.metadata,
+        temperature: llmResp.temperature,
+        context: llmResp.context,
+        taskType: llmResp.taskType,
+        proficiency: llmResp.proficiency,
+        usage: llmResp.usage,
+        retrievedChunks: retrievedChunks.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Dynamic prompting debate generation error:', error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+}
+
+module.exports = {
+  generateDebate,
+  generateDebateWithCoT,
+  generateDebateWithZeroShot,
+  generateDebateWithDynamicPrompting
+};
